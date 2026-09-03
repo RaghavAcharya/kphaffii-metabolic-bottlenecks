@@ -1,0 +1,35 @@
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+desktop.ini
+*~
+
+# MATLAB
+*.asv
+*.autosave
+slprj/
+
+# Python
+__pycache__/
+*.pyc
+
+# R
+.Rhistory
+.RData
+.Rproj.user/
+*_cache/
+*_files/
+
+# --- Regenerated pipeline outputs (produced by the scripts; not source) ---
+# Nutrient-cost pipeline
+matlab/scripts/04_nutrient_cost/synthCost_*.csv
+matlab/scripts/04_nutrient_cost/synthCostBiomas_*.csv
+matlab/scripts/04_nutrient_cost/geneProductionFluxData_*.csv
+matlab/scripts/04_nutrient_cost/rpProductionFluxData_*.csv
+matlab/scripts/04_nutrient_cost/fluxData.mat
+
+# Figures rendered by R/Figs.Rmd into R/ (figure_data/ inputs are kept)
+R/*.svg
+R/*.pdf
+R/*.png
+R/*.html

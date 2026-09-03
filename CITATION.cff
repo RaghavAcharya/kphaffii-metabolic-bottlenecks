@@ -1,0 +1,42 @@
+cff-version: 1.2.0
+message: "If you use this code or data, please cite the associated manuscript."
+title: "Metabolic Upregulation (Paper 1) — Code & Data"
+abstract: >-
+  Code and data to reproduce the genome-scale metabolic modeling, FSEOF target
+  identification, transcription-factor analysis, and nutrient-cost pipeline for
+  recombinant-protein production in Komagataella phaffii.
+license: MIT
+authors:
+  - family-names: Acharya
+    given-names: Raghav
+  - family-names: Cha
+    given-names: Eugenie
+  - family-names: Atufa
+    given-names: Anwar
+  - family-names: Wang
+    given-names: Eric
+  - family-names: Narayanan
+    given-names: Harini
+  - family-names: Sunday
+    given-names: Brittney C.
+  - family-names: Love
+    given-names: J. Christopher
+preferred-citation:
+  type: article
+  title: "Genome-Scale Metabolic Models Identify Metabolic Bottlenecks in Production of Recombinant Proteins in Komagataella phaffii"
+  year: 2026
+  authors:
+    - family-names: Acharya
+      given-names: Raghav
+    - family-names: Cha
+      given-names: Eugenie
+    - family-names: Atufa
+      given-names: Anwar
+    - family-names: Wang
+      given-names: Eric
+    - family-names: Narayanan
+      given-names: Harini
+    - family-names: Sunday
+      given-names: Brittney C.
+    - family-names: Love
+      given-names: J. Christopher

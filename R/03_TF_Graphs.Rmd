@@ -1,0 +1,201 @@
+---
+title: "03_TF_Graphs"
+author: "RA"
+date: "2025-05-16"
+output: html_document
+---
+
+#0. Startup
+## 0.1 Clear Workspace
+```{r}
+rm(list = ls())
+gc()
+```
+
+#1. Import Data File
+```{r}
+library(readxl)
+tf_targets <- read_excel('figure_data/all_tf_targets.xlsx')
+str_tf_targets <- tf_targets[tf_targets$Str_Eng_Target,]
+```
+
+```{r}
+library(igraph)
+library(ggplot2)
+library(ggraph)
+library(dplyr)
+library(gridExtra)
+
+# Assuming your data is in a data frame called 'str_tf_targets'
+
+# Get the unique environments
+environments <- unique(str_tf_targets$Environment)
+
+# Create an empty list to store the plots
+plot_list <- list()
+
+# Loop through each environment
+for (env in environments) {
+    # Filter the data for the current environment
+    env_data <- str_tf_targets %>% filter(Environment == env)
+
+    # Count the number of target genes for each transcription factor
+    tf_gene_counts <- env_data %>%
+        group_by(Transcription_Factor) %>%
+        summarise(n_targets = n_distinct(Gene)) %>%
+        filter(n_targets >= 50)
+
+    # Filter the environment data to only include TFs with at least 50 targets
+    filtered_env_data <- env_data %>%
+        filter(Transcription_Factor %in% tf_gene_counts$Transcription_Factor)
+
+    # If there are no TFs meeting the criteria, skip this environment
+    if (nrow(filtered_env_data) == 0) {
+        cat(paste("No transcription factors with >= 50 targets found for environment:", env, "\n"))
+        next
+    }
+
+    # Add a node_type column to filtered_env_data
+    filtered_env_data <- filtered_env_data %>%
+        mutate(node_type = ifelse(Gene %in% Transcription_Factor, "Transcription_Factor", "Gene"))
+
+    # Determine important genes based on the environment
+    if (startsWith(env, "HSA")) {
+        important_genes <- filtered_env_data %>%
+            filter(node_type == "Gene") %>%
+            distinct(Gene, Gene_Predicted_Change) %>%
+            arrange(desc(abs(Gene_Predicted_Change))) %>%
+            slice_head(prop = 0.10) %>%
+            pull(Gene)
+        filtered_env_data <- filtered_env_data %>%
+            filter(Gene %in% important_genes | node_type == "Transcription_Factor")
+    } else if (startsWith(env, "All")) {
+        important_genes <- filtered_env_data %>%
+            filter(node_type == "Gene") %>%
+            distinct(Gene, Gene_Predicted_Change) %>%
+            arrange(abs(Gene_Predicted_Change)) %>%
+            slice_head(prop = 0.10) %>%
+            pull(Gene)
+        filtered_env_data <- filtered_env_data %>%
+            filter(Gene %in% important_genes | node_type == "Transcription_Factor")
+    }
+
+    # Create the graph object from the filtered data
+    graph_data <- graph_from_data_frame(filtered_env_data[, c("Transcription_Factor", "Gene")], directed = TRUE)
+
+    # Get unique nodes directly from the graph object
+    all_nodes <- V(graph_data)$name
+
+    # Create a data frame for node attributes based on the graph nodes
+    node_attributes <- data.frame(name = all_nodes, stringsAsFactors = FALSE)
+
+    # Add gene-specific attributes
+    gene_attributes <- filtered_env_data %>%
+        filter(node_type == "Gene", Gene %in% all_nodes) %>%
+        distinct(Gene, Category, Gene_Predicted_Change) %>%
+        rename(name = Gene, gene_category = Category, gene_change = Gene_Predicted_Change)
+
+    node_attributes <- left_join(node_attributes, gene_attributes, by = "name")
+
+    # Identify transcription factors and add their category
+    tf_attributes <- filtered_env_data %>%
+        filter(node_type == "Transcription_Factor", Transcription_Factor %in% all_nodes) %>%
+        distinct(Transcription_Factor, TF_Category) %>%
+        rename(name = Transcription_Factor, tf_category = TF_Category)
+
+    node_attributes <- left_join(node_attributes, tf_attributes, by = "name")
+
+    # Determine node type
+    node_attributes$node_type <- ifelse(node_attributes$name %in% filtered_env_data$Gene, "Gene", "Transcription_Factor")
+
+    # Calculate the number of outgoing edges for each transcription factor
+    tf_out_degree <- filtered_env_data %>%
+        filter(Transcription_Factor %in% all_nodes) %>%
+        group_by(Transcription_Factor) %>%
+        summarise(tf_degree = n_distinct(Gene)) %>%
+        rename(name = Transcription_Factor)
+
+    node_attributes <- left_join(node_attributes, tf_out_degree, by = "name")
+    node_attributes$tf_degree[is.na(node_attributes$tf_degree)] <- 0 # Fill NA for genes
+
+    # Set node colors based on 'Category' for genes
+    node_attributes$node_color <- factor(
+        ifelse(node_attributes$node_type == "Gene",
+               as.character(node_attributes$gene_category),
+               "Transcription Factor"),
+        levels = unique(c(as.character(gene_attributes$gene_category), "Transcription Factor"))
+    )
+
+    # Set node sizes based on 'Gene_Predicted_Change' for genes and degree for TFs
+    node_attributes$node_size <- ifelse(node_attributes$node_type == "Gene",
+                                         abs(node_attributes$gene_change), # Using absolute value for size
+                                         node_attributes$tf_degree + 2) # Adding a small constant
+
+    # Add edge attributes for color
+    E(graph_data)$edge_color <- as.factor(filtered_env_data$TF_Category)
+
+    # Add node attributes to the graph object, ensuring order matches
+    V(graph_data)$color <- node_attributes$node_color[match(V(graph_data)$name, node_attributes$name)]
+    V(graph_data)$size <- node_attributes$node_size[match(V(graph_data)$name, node_attributes$name)]
+    V(graph_data)$node_type <- node_attributes$node_type[match(V(graph_data)$name, node_attributes$name)]
+
+    cat(paste("Environment:", env, "\n"))
+    cat(paste("Number of vertices in graph_data:", vcount(graph_data), "\n"))
+    cat("Vertex names in graph_data:\n")
+    print(V(graph_data)$name)
+    cat("Node type attribute in graph_data:\n")
+    print(V(graph_data)$node_type)
+    cat("\n")
+
+    layout_function <- function(graph) {
+        coords <- layout_with_fr(graph)
+        n_nodes <- vcount(graph)
+
+        tf_indices <- which(V(graph)$node_type == "Transcription_Factor")
+        gene_indices <- which(V(graph)$node_type == "Gene")
+
+        if (length(tf_indices) > 0 && length(gene_indices) > 0 && nrow(coords) == n_nodes) {
+            gene_coords <- coords[gene_indices, , drop = FALSE] # Keep as matrix even if one row
+            if (nrow(gene_coords) > 0) {
+                center_x <- mean(gene_coords[, 1], na.rm = TRUE)
+                center_y <- mean(gene_coords[, 2], na.rm = TRUE)
+
+                for (i in tf_indices) {
+                    if (i <= nrow(coords)) { # Ensure index is within bounds
+                        vector_x <- coords[i, 1] - center_x
+                        vector_y <- coords[i, 2] - center_y
+                        magnitude <- sqrt(vector_x^2 + vector_y^2)
+                        if (magnitude > 0) {
+                            push_factor <- 1.5
+                            coords[i, 1] <- coords[i, 1] + (vector_x / magnitude) * push_factor
+                            coords[i, 2] <- coords[i, 2] + (vector_y / magnitude) * push_factor
+                        }
+                    }
+                }
+            }
+        }
+        return(coords)
+    }
+    # Create the plot using ggraph with the custom layout
+    p <- ggraph(graph_data, layout = layout_function) +
+        geom_edge_fan(aes(color = edge_color),
+                      arrow = arrow(length = unit(2, 'mm')),
+                      end_cap = circle(3, 'mm')) +
+        geom_node_point(aes(size = size, color = color, shape = node_type)) +
+        geom_node_text(aes(label = name), repel = TRUE, size = 2, max.overlaps = Inf) +
+        scale_edge_color_discrete(name = "TF Category") +
+        scale_color_discrete(name = "Node Category") +
+        scale_size_continuous(name = "Node Size") +
+        scale_shape_discrete(name = "Node Type") +
+        labs(title = paste("Network for Environment:", env)) +
+        theme_graph()
+
+    # Add the plot to the list
+    plot_list[[env]] <- p
+}
+
+# Arrange all figures together and suppress warnings
+suppressWarnings({
+    grid.arrange(grobs = plot_list, ncol = ceiling(sqrt(length(plot_list)))) # Arrange in a grid
+})
+```

@@ -1,0 +1,3919 @@
+---
+title: "Fig1"
+author: "RA"
+date: "2025-10-07"
+output: html_document
+---
+#0. Startup
+## 0.1 Clear Workspace
+```{r}
+rm(list = ls())
+gc()
+```
+
+#1. Import Files
+##1.1 Data Files
+```{r}
+library(readxl)
+FSEOF_target <- read_excel("figure_data/01 Round 1 HSA Upregulations/FSEOF_results.xlsx")
+GO_file <- 'figure_data/goSLIMmod.gmt'
+```
+#2. Fig 1
+##2.1 Fig 1c. 
+```{r}
+library(dplyr)
+library(ggplot2)
+library(forcats)
+
+plot_data <- FSEOF_target
+
+# keep top 25% by predicted_change (not absolute)
+cutoff <- quantile(plot_data$predicted_change, 0.85, na.rm = TRUE)
+
+plot_data_top <- plot_data %>%
+  filter(predicted_change >= cutoff) %>%
+  mutate(
+    FinalAnnotation = fct_reorder(FinalAnnotation, abs(predicted_change), .desc = TRUE)
+  )
+
+plot_data_top$predicted_change[plot_data_top$category=="Knockout"] = -plot_data_top$predicted_change[plot_data_top$category=="Knockout"]
+
+plot_data_top <- plot_data_top %>%
+  mutate(FinalAnnotation = forcats::fct_reorder(FinalAnnotation, abs(predicted_change), .desc = T))
+
+
+f1c <- ggplot(plot_data_top, aes(x = FinalAnnotation, y = predicted_change, fill = proteinType)) +
+  geom_col(color = "black") +
+  labs(x = NULL, y = "Predicted change") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) 
+f1c
+ggsave('Figure_1c.svg' , f1c, width = 8, height = 2)
+```
+## 2.2 Fig 1d.
+```{r}
+# Packages
+library(dplyr)
+library(tibble)
+library(ggplot2)
+library(forcats)
+library(fgsea)
+
+# ---- 1) Prepare gene-level stats (one value per gene) ----
+# FSEOF_target must have: GQ_names (gene IDs) and predicted_change (numeric)
+temp <- FSEOF_target
+temp$predicted_change[temp$category=="Knockout"] = -temp$predicted_change[temp$category=="Knockout"]
+gene_stats <- temp %>%
+  filter(!is.na(GQ_names), !is.na(predicted_change)) %>%
+  group_by(GQ_names) %>%
+  summarise(stat = mean(predicted_change), .groups = "drop") %>%
+  arrange(desc(stat))
+
+stats <- setNames(gene_stats$stat, gene_stats$GQ_names)
+
+# ---- 2) Read pathways from GMT and keep only those overlapping your genes ----
+GO_file <- "figure_data/goSLIMmod.gmt"
+pathways_all <- fgsea::gmtPathways(GO_file)
+
+# keep pathways with at least 5 overlapping genes (tweak min size as needed)
+pathways <- lapply(pathways_all, function(genes) intersect(genes, names(stats)))
+pathways <- pathways[ vapply(pathways, length, integer(1)) >= 5 ]
+
+# ---- 3) Run GSEA ----
+set.seed(1)
+fg <- fgsea(
+  pathways = pathways,
+  stats    = stats,
+  minSize  = 3,
+  maxSize  = 500,
+  nperm    = 10000
+)
+
+# ---- 4) Compute mean predicted_change and pathway sizes for plotting ----
+path_summary <- tibble(
+  pathway = names(pathways),
+  n_genes = vapply(pathways, length, integer(1)),
+  mean_predicted_change = vapply(pathways, function(g)
+    mean(stats[g], na.rm = TRUE), numeric(1))
+)
+
+plot_df <- fg %>%
+  as_tibble() %>%
+  select(pathway, padj) %>%                 # padj is the FDR from fgsea
+  left_join(path_summary, by = "pathway") %>%
+  # OPTIONAL: keep the top 30 by |mean change| for readability
+  arrange(desc(abs(mean_predicted_change))) %>%
+  slice_head(n = 30) %>%
+  mutate(
+    pathway = fct_reorder(pathway, mean_predicted_change), # y ordered by mean change
+    log10FDR = -log10(padj)                                  # color = log(FDR)
+    # If you prefer conventional significance coloring, use: neglog10FDR = -log10(padj)
+  )
+
+plot_df_filtered <- plot_df[plot_df$log10FDR > -log10(0.05), ]
+# ---- 5) Dotplot ----
+f1d <- ggplot(plot_df_filtered, aes(x = mean_predicted_change, y = pathway)) +
+  geom_point(aes(size = n_genes, color = log10FDR)) +
+  labs(
+    x = "Mean predicted change",
+    y = NULL,
+    color = "log10(FDR)",
+    size = "# genes"
+  ) +
+  theme_bw() +
+  theme(axis.text.y = element_text(size = 9)) + 
+  scale_color_gradient(low = "#400045", high = "#d8b365")
+f1d
+ggsave('Figure_1d.svg' , f1d, width = 3.5, height = 1)
+```
+
+#3. Fig 2
+##3.1 Fig 2a. 
+```{r}
+AllStrainCultivationResults <- read_excel("figure_data/StrainCultivationResultCompilation.xlsx")
+
+library(dplyr)
+library(stringr)
+library(janitor)
+
+# ---- 1) Normalize & map category -> Modification equivalence ----
+# Map per your spec:
+# "Upregulation"           -> "Upregulation"
+# "Mixed, Upregulation"    -> "Upregulation"
+# "Mixed, Knockout"        -> "Knockout"
+# "Knockout"               -> "Knockout"
+map_category_to_mod <- function(x) {
+  dplyr::case_when(
+    x == "Upregulation"         ~ "Upregulation",
+    x == "Mixed, Upregulation"  ~ "Upregulation",
+    x == "Mixed, Knockout"      ~ "Knockout",
+    x == "Knockout"             ~ "Knockout",
+    TRUE                        ~ NA_character_
+  )
+}
+
+FSEOF_clean <- FSEOF_target %>%
+  mutate(
+    .gene_key = str_to_upper(str_trim(as.character(GQ_names))),
+    .mod_map  = str_to_upper(map_category_to_mod(category))  # mapped category
+  ) %>%
+  # drop rows where category doesn't map (optional; prevents NA join keys)
+  filter(!is.na(.mod_map))
+
+Cult_clean <- AllStrainCultivationResults %>%
+  mutate(
+    .gene_key = str_to_upper(str_trim(as.character(Gene))),
+    .rp_key   = str_to_upper(str_trim(as.character(RecombinantProtein))),
+    .mod_key  = str_to_upper(str_trim(as.character(Modification)))
+  )
+
+# ---- 2) Core overlap: genes where mapped category matches Modification, for HSA ----
+HSA_overlap_core <- FSEOF_clean %>%
+  inner_join(
+    Cult_clean,
+    by = c(".gene_key" = ".gene_key", ".mod_map" = ".mod_key"),
+    suffix = c(".FSEOF", ".Cult")
+  ) %>%
+  filter(.rp_key == "HSA")
+
+# ---- 3) Add all HSA Control rows (regardless of category mapping) ----
+HSA_controls <- FSEOF_clean %>%
+  right_join(
+    Cult_clean %>% filter(.rp_key == "HSA", .mod_key == "CONTROL"),
+    by = c(".gene_key" = ".gene_key"),
+    suffix = c(".FSEOF", ".Cult")
+  )
+
+# ---- 4) Combine, clean helper cols, de-dup ----
+HSA_overlap <- bind_rows(HSA_overlap_core, HSA_controls) %>%
+  select(-.gene_key, -.rp_key, -.mod_key, -.mod_map) %>%
+  distinct()
+
+HSA_overlap <- clean_names(HSA_overlap)
+temp <- HSA_overlap$predicted_change>8
+temp[is.na(temp)] <- T
+HSA_overlap <- HSA_overlap[temp, ]
+
+# Optional: remove exact duplicate rows if the join creates many-to-many matches
+# HSA_overlap <- HSA_overlap %>% distinct()
+
+```
+
+```{r}
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(tidyr)
+  library(stringr)
+  library(ggplot2)
+  library(patchwork)
+})
+
+# --- NEW: for heatmap colored x-labels (optional) ---
+ggtext_available <- requireNamespace("ggtext", quietly = TRUE)
+
+# =========================
+# Parameters (colors & fonts)
+# =========================
+mod_colors <- c(
+  "UPREGULATION" = "#5ab4ac",
+  "KNOCKOUT"     = "#d8b365",
+  # CHANGED: Control light grey instead of black
+  "CONTROL"      = "#bdbdbd"
+)
+
+pt10_mm <- 10 / 2.845
+pt12_mm <- 12 / 2.845
+axis_text_size   <- 10
+axis_title_size  <- 12
+legend_text_size <- 10
+legend_title_size <- 10
+star_size_mm <- pt10_mm
+
+repcols_for_base <- function(df, base) {
+  grep(paste0("^", base, "_\\d+$"), names(df), value = TRUE)
+}
+
+make_label <- function(mod_key, label_src, control_label = "Control", delta_symbol = "\u0394") {
+  up_arrow <- "↑"; Encoding(up_arrow) <- "UTF-8"   # ← literal arrow + set encoding
+  dplyr::case_when(
+    mod_key == "CONTROL"      ~ control_label,
+    mod_key == "UPREGULATION" ~ paste0(label_src),
+    mod_key == "KNOCKOUT"     ~ paste0(label_src),
+    TRUE ~ label_src
+  )
+}
+
+
+
+compute_one_sided_bh_vs_control <- function(values_by_label, control_label = "Control") {
+  ctrl_vals <- values_by_label %>%
+    dplyr::filter(.label == control_label) %>%
+    dplyr::pull(value)
+  if (length(ctrl_vals) < 2) {
+    return(values_by_label %>% dplyr::distinct(.label) %>% dplyr::mutate(pval = NA_real_, padj = NA_real_))
+  }
+  raw <- values_by_label %>%
+    dplyr::group_by(.label) %>%
+    dplyr::summarize(
+      pval = tryCatch({
+        if (.label[1] == control_label) NA_real_
+        else {
+          x <- value
+          if (length(x) < 2) NA_real_
+          else stats::t.test(x, ctrl_vals, var.equal = FALSE, alternative = "greater")$p.value
+        }
+      }, error = function(e) NA_real_),
+      .groups = "drop"
+    )
+  idx <- !is.na(raw$pval) & raw$.label != control_label
+  padj <- rep(NA_real_, nrow(raw))
+  if (any(idx)) padj[idx] <- p.adjust(raw$pval[idx], method = "BH")
+  raw$padj <- padj
+  raw
+}
+
+# =========================
+# BAR PLOT
+# =========================
+# --- NEW: shared x-levels helper (Control first, then descending predicted_change) ---
+# REPLACE the bad name compute_x_levelscompute_x_levels with this:
+compute_x_levels <- function(
+  df,
+  control_label = "Control",
+  mod_col  = "modification",
+  label_source_col = "final_annotation_cult",
+  predicted_col = "predicted_change",
+  delta_symbol = "\u0394"
+) {
+  df_lab <- df %>%
+    dplyr::mutate(
+      .mod_key = stringr::str_to_upper(stringr::str_trim(.data[[mod_col]])),
+      .label   = make_label(.mod_key, .data[[label_source_col]], control_label, delta_symbol)
+    )
+
+  order_df <- df_lab %>%
+    dplyr::distinct(.label, .mod_key, .data[[predicted_col]]) %>%
+    dplyr::group_by(.label, .mod_key) %>%
+    dplyr::summarize(predicted_change = suppressWarnings(dplyr::first(na.omit(.data[[predicted_col]]))), .groups = "drop") %>%
+    dplyr::mutate(is_control = (.mod_key == "CONTROL"),
+                  predicted_change = ifelse(is_control, NA_real_, predicted_change))
+
+  non_ctrl <- order_df %>%
+    dplyr::filter(!is_control) %>%
+    dplyr::arrange(dplyr::desc(predicted_change)) %>%
+    dplyr::pull(.label)
+
+  c(control_label, setdiff(non_ctrl, control_label))
+}
+
+# IMPORTANT: rebuild after the arrow-label change
+x_levels_shared <- compute_x_levels(
+  HSA_overlap,
+  control_label = "Control",
+  mod_col = "modification",
+  label_source_col = "final_annotation_cult",
+  predicted_col = "predicted_change"
+)
+print(x_levels_shared)
+
+
+# --- MOD: let plots accept a precomputed x_levels (shared ordering) & optional legend toggle ---
+plot_bar_by_mod <- function(
+  df, col_base,
+  y_label,
+  do_one_tailed_BH = FALSE,
+  gene_col = "gene",
+  mod_col  = "modification",
+  label_source_col = "final_annotation_cult",
+  control_label = "Control",
+  predicted_col = "predicted_change",
+  place_control_first = TRUE,     # kept for API compatibility; ignored when x_levels provided
+  delta_symbol = "\u0394",
+  x_levels = NULL,                # <-- NEW
+  show_legend = TRUE              # <-- NEW
+) {
+  rep_cols <- repcols_for_base(df, col_base)
+  if (length(rep_cols) == 0) stop(sprintf("No replicate columns found for '%s_<n>'", col_base))
+
+  df_lab <- df %>%
+    dplyr::mutate(
+      .mod_key = stringr::str_to_upper(stringr::str_trim(.data[[mod_col]])),
+      .label   = make_label(.mod_key, .data[[label_source_col]], control_label, delta_symbol)
+    )
+
+  long <- df_lab %>%
+    dplyr::select(dplyr::all_of(c(gene_col, mod_col, label_source_col, predicted_col, ".label", ".mod_key", rep_cols))) %>%
+    tidyr::pivot_longer(cols = dplyr::all_of(rep_cols), names_to = "rep", values_to = "value") %>%
+    dplyr::mutate(rep = as.integer(sub(".*_(\\d+)$", "\\1", rep))) %>%
+    dplyr::filter(!is.na(value))
+
+  # --- MOD: use shared x_levels if provided ---
+  if (is.null(x_levels)) {
+    order_df <- df_lab %>%
+      dplyr::distinct(.label, .mod_key, .data[[predicted_col]]) %>%
+      dplyr::group_by(.label, .mod_key) %>%
+      dplyr::summarize(predicted_change = suppressWarnings(dplyr::first(na.omit(.data[[predicted_col]]))), .groups = "drop") %>%
+      dplyr::mutate(is_control = (.mod_key == "CONTROL"),
+                    predicted_change = ifelse(is_control, NA_real_, predicted_change))
+    non_ctrl <- order_df %>% dplyr::filter(!is_control) %>% dplyr::arrange(dplyr::desc(predicted_change)) %>% dplyr::pull(.label)
+    x_levels <- c(control_label, setdiff(non_ctrl, control_label))
+  }
+
+  long$._label_factor <- factor(long$.label, levels = x_levels)
+
+  bar_df <- long %>%
+    dplyr::group_by(.label) %>%
+    dplyr::summarize(mean_val = mean(value, na.rm = TRUE),
+                     ymax = max(value, na.rm = TRUE), .groups = "drop") %>%
+    dplyr::left_join(df_lab %>% dplyr::distinct(.label, .mod_key), by = ".label")
+
+  if (do_one_tailed_BH) {
+    ptab <- compute_one_sided_bh_vs_control(long %>% dplyr::select(.label, value), control_label)
+  } else {
+    ctrl_vals <- long %>% dplyr::filter(tolower(.mod_key) == "control") %>% dplyr::pull(value)
+    ptab <- long %>%
+      dplyr::group_by(.label) %>%
+      dplyr::summarize(
+        pval = tryCatch({
+          if (.label[1] == control_label || length(ctrl_vals) < 2 || dplyr::n() < 2) NA_real_
+          else stats::t.test(value, ctrl_vals, var.equal = FALSE)$p.value
+        }, error = function(e) NA_real_),
+        .groups = "drop"
+      ) %>%
+      dplyr::mutate(padj = pval)
+  }
+
+  bar_df <- bar_df %>%
+    dplyr::left_join(ptab, by = ".label") %>%
+    dplyr::mutate(sig = dplyr::case_when(
+      is.na(padj) ~ "",
+      padj < 0.001 ~ "***",
+      padj < 0.01  ~ "**",
+      padj < 0.05  ~ "*",
+      TRUE ~ ""
+    ))
+
+  panel_top <- 1.1*max(long$value, na.rm = TRUE)
+  panel_range <- panel_top - 0
+  base_star_y <- panel_top - 0.005 * panel_range
+  set.seed(42)
+  jitter_amt <- (runif(nrow(bar_df), min = -0.05, max = 0.05)) * panel_range
+  bar_df$star_y <- pmin(panel_top - 0.002 * panel_range, base_star_y + jitter_amt)
+
+  p <- ggplot() +
+    geom_col(
+      data = bar_df,
+      aes(x = .label, y = mean_val, fill = .mod_key),
+      width = 0.7, color = NA
+    ) +
+    geom_point(
+      data = long,
+      aes(x = ._label_factor, y = value),
+      position = position_jitter(width = 0.15, height = 0),
+      size = 0.9, alpha = 0.8
+    ) +
+    geom_text(
+      data = bar_df %>% dplyr::filter(sig != ""),
+      aes(x = .label, y = star_y, label = sig),
+      vjust = 1.1,
+      size = star_size_mm
+    ) +
+    scale_fill_manual(
+      name = "Modification",
+      values = setNames(mod_colors[unique(bar_df$.mod_key)], unique(bar_df$.mod_key)),
+      breaks = c("CONTROL", "UPREGULATION", "KNOCKOUT")
+    ) +
+    labs(x = NULL, y = y_label) +
+    theme_bw() +
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = axis_text_size),
+      axis.text.y = element_text(size = axis_text_size),
+      axis.title.x = element_blank(),
+      axis.title.y = element_text(size = axis_title_size),
+      legend.text  = element_text(size = legend_text_size),
+      legend.title = element_text(size = legend_title_size),
+      plot.title = element_blank(),
+      legend.position = if (show_legend) "right" else "none"   # <-- MOD: toggle legend
+    ) +
+    scale_x_discrete(drop = FALSE, limits = x_levels) +
+    scale_y_continuous(limits = c(0, NA)) +
+    guides(fill = guide_legend(override.aes = list(color = NA))) +
+    coord_cartesian(clip = "on")
+
+  p
+}
+
+# --- MOD: heatmap accepts shared x_levels too ---
+plot_single_rp_heatmap <- function(
+  df, col_base,
+  control_label = "Control",
+  gene_col = "gene",
+  mod_col  = "modification",
+  label_source_col = "final_annotation_cult",
+  rp_col = "recombinant_protein",
+  predicted_col = "predicted_change",
+  x_levels = NULL      # <-- NEW
+) {
+  rep_cols <- repcols_for_base(df, col_base)
+  if (length(rep_cols) == 0) stop(sprintf("No replicate columns found for '%s_<n>'", col_base))
+
+  df_lab <- df %>%
+    dplyr::mutate(
+      .mod_key = stringr::str_to_upper(stringr::str_trim(.data[[mod_col]])),
+      .label   = make_label(.mod_key, .data[[label_source_col]], control_label)
+    )
+
+  long <- df_lab %>%
+    dplyr::select(dplyr::all_of(c(gene_col, mod_col, label_source_col, rp_col, predicted_col, ".label", ".mod_key", rep_cols))) %>%
+    tidyr::pivot_longer(cols = dplyr::all_of(rep_cols), names_to = "rep", values_to = "value") %>%
+    dplyr::filter(!is.na(value)) %>%
+    dplyr::mutate(rp = .data[[rp_col]])
+
+  agg <- long %>%
+    dplyr::group_by(.label, rp) %>%
+    dplyr::summarize(mean_val = mean(value, na.rm = TRUE), .groups = "drop")
+
+  ctrl_vals <- long %>% dplyr::filter(tolower(.mod_key) == "control") %>% dplyr::pull(value)
+  ctrl_mean <- if (length(ctrl_vals)) mean(ctrl_vals, na.rm = TRUE) else NA_real_
+  max_val <- max(agg$mean_val, na.rm = TRUE); if (!is.finite(max_val)) max_val <- 1e-8
+  if (!is.finite(ctrl_mean) || ctrl_mean < 0) ctrl_mean <- 0
+  v_ctrl <- min(max(ctrl_mean / max_val, 0), 1)
+
+  ptab <- compute_one_sided_bh_vs_control(long %>% dplyr::select(.label, value), control_label) %>%
+    dplyr::mutate(sig = dplyr::case_when(
+      is.na(padj) ~ "",
+      padj < 0.001 ~ "***",
+      padj < 0.01  ~ "**",
+      padj < 0.05  ~ "*",
+      TRUE ~ ""
+    ))
+  stack_sig <- function(s) if (s == "") "" else paste(rep("*", nchar(s)), collapse = "\n")
+  ptab$sig_stack <- vapply(ptab$sig, stack_sig, character(1))
+  agg <- agg %>% dplyr::left_join(ptab %>% dplyr::select(.label, sig_stack), by = ".label")
+
+  # --- MOD: use shared x_levels if provided; otherwise compute local
+  if (is.null(x_levels)) {
+    x_levels <- compute_x_levels(df, control_label, mod_col, label_source_col, predicted_col)
+  }
+  agg$.label <- factor(agg$.label, levels = x_levels)
+
+  # colored x-ticks (same as before)
+  label_mod_map <- df_lab %>% dplyr::distinct(.label, .mod_key)
+  label_mod_map <- tibble::tibble(.label = x_levels) %>%
+    dplyr::left_join(label_mod_map, by = ".label") %>%
+    dplyr::mutate(.mod_key = dplyr::coalesce(.mod_key, "CONTROL"))
+
+  axis_labels <- setNames(as.character(x_levels), x_levels)
+  if (ggtext_available) {
+    tick_color <- dplyr::case_when(
+      label_mod_map$.mod_key == "UPREGULATION" ~ "#5ab4ac",
+      label_mod_map$.mod_key == "KNOCKOUT"     ~ "#d8b365",
+      TRUE                                      ~ "#000000"
+    )
+    # ensure arrow renders inside HTML spans
+    x_levels_html <- x_levels
+    axis_labels <- setNames(
+      paste0("<span style='color:", tick_color, "'>", x_levels_html, "</span>"),
+      x_levels
+    )
+  }
+
+
+  heat_colors <- c("#ffffff", "#ece7f2", "#2b8cbe")
+  heat_values <- sort(unique(c(0, v_ctrl, 1)))
+  # Count stars per cell: "", "*", "**", "***" -> 0..3
+agg <- agg %>%
+  dplyr::left_join(
+    ptab %>%
+      dplyr::select(.label, sig) %>%
+      dplyr::mutate(n_stars = nchar(sig)),
+    by = ".label"
+  )
+
+  # Split into up to three layers; each row gets nudged up/center/down
+  stars_top    <- agg %>% dplyr::filter(n_stars >= 1)
+  stars_middle <- agg %>% dplyr::filter(n_stars >= 2)
+  stars_bottom <- agg %>% dplyr::filter(n_stars >= 3)
+  
+  star_size <- star_size_mm
+  star_nudge <- 0.15  # adjust this to tighten/loosen (0.10–0.16 works well)
+  
+  p <- ggplot(agg, aes(x = .label, y = rp, fill = mean_val)) +
+    geom_tile(color = NA) +
+    scale_fill_gradientn(
+      colors = heat_colors,
+      values = heat_values,
+      limits = c(0, max_val),
+      name = paste0("mean(", col_base, ")")
+    ) +
+    # draw stars top/center/bottom with small vertical nudge
+    { if (nrow(stars_top))    geom_text(data = stars_top,    aes(label = "*"),
+                                        position = position_nudge(y =  star_nudge),
+                                        size = star_size) } +
+    { if (nrow(stars_middle)) geom_text(data = stars_middle, aes(label = "*"),
+                                        position = position_nudge(y =  0),
+                                        size = star_size) } +
+    { if (nrow(stars_bottom)) geom_text(data = stars_bottom, aes(label = "*"),
+                                        position = position_nudge(y = -star_nudge),
+                                        size = star_size) } +
+    labs(x = NULL, y = NULL) +
+    labs(x = NULL, y = NULL) +
+    theme_bw() +
+    theme(
+      axis.text.x = if (ggtext_available)
+        ggtext::element_markdown(angle = 90, hjust = 1, vjust = 1, size = axis_text_size)
+      else
+        element_text(angle = 90, hjust = 1, vjust = 1, size = axis_text_size),
+      axis.text.y = element_text(size = axis_text_size),
+      axis.title.x = element_blank(),
+      axis.title.y = element_blank(),
+      legend.text  = element_text(size = legend_text_size),
+      legend.title = element_text(size = legend_title_size),
+      panel.grid = element_blank()
+    ) +
+    scale_x_discrete(labels = axis_labels, drop = FALSE, limits = x_levels) +
+    scale_y_discrete(expand = c(0, 0))
+}
+
+# =========================
+# Build once with SHARED ORDER
+# =========================
+x_levels_shared <- compute_x_levels(
+  HSA_overlap,
+  control_label = "Control",
+  mod_col = "modification",
+  label_source_col = "final_annotation_cult",
+  predicted_col = "predicted_change"
+)
+
+fig2a <- plot_bar_by_mod(
+  HSA_overlap,
+  col_base = "qp_mg_l_od_hr",
+  y_label  = "q_p (mg/L/OD/hr)",
+  do_one_tailed_BH = TRUE,
+  x_levels = x_levels_shared,
+  show_legend = TRUE    # keep legend on first barplot
+)
+
+fig2b <- plot_bar_by_mod(
+  HSA_overlap,
+  col_base = "od_48hr",
+  y_label  = "Final Culture Density (OD)",
+  do_one_tailed_BH = FALSE,
+  x_levels = x_levels_shared,
+  show_legend = FALSE   # <-- MOD: hide legend on second barplot
+)
+
+fig2c <- plot_single_rp_heatmap(
+  HSA_overlap,
+  col_base = "titer",
+  x_levels = x_levels_shared
+)
+
+fig2abc <- (
+  (fig2a + theme(axis.title.x = element_blank(),
+                 axis.text.x  = element_blank(),
+                 axis.ticks.x = element_blank())) /
+  (fig2b + theme(axis.title.x = element_blank(),
+                 axis.text.x  = element_blank(),
+                 axis.ticks.x = element_blank())) /
+  fig2c
+) + plot_layout(heights = c(5, 5, 1))
+
+fig2abc
+ggsave('Fig2abc.svg', fig2abc, width = 8.5, height = 4, units = "in")
+
+
+```
+
+
+##3.3 Fig 2c.
+```{r}
+library(tidyverse)
+library(broom)
+library(janitor)
+
+# --- Read data ---
+multimoleculeFSEOF <- readxl::read_excel(
+  "figure_data/02 Round 2 - Multimolecule FSEOF/Multimolecule_FSEOF_Results.xlsx"
+)
+
+# --- Clean names for AllStrainCultivationResults ---
+all_data <- clean_names(AllStrainCultivationResults)
+
+# --- 1. Compute per-row averages and build plot_data ---
+plot_data <- all_data %>%
+  mutate(
+    od_avg = rowMeans(select(., matches("^od_48hr_\\d+$")), na.rm = TRUE),
+    qp_avg = rowMeans(select(., matches("^qp_mg_l_od_hr_\\d+$")), na.rm = TRUE),
+    recombinant_protein = str_to_lower(recombinant_protein)
+  ) %>%
+  filter(is.finite(od_avg), is.finite(qp_avg)) %>%
+  mutate(
+    protein_label = recode(recombinant_protein,
+                           "hsa"         = "HSA",
+                           "rbdj"        = "RBDJ",
+                           "nb3b2"       = "nb3B2",
+                           "trastuzumab" = "Trastuzumab"),
+    protein_label = factor(protein_label, levels = c("nb3B2", "RBDJ", "HSA", "Trastuzumab"))
+  )
+
+# --- 2. Pre-compute Spearman rho and p-value per protein ---
+cor_labels <- plot_data %>%
+  group_by(protein_label) %>%
+  summarise(
+    ct      = list(cor.test(od_avg, qp_avg, method = "spearman")),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    rho   = map_dbl(ct, ~ .x$estimate),
+    p_val = map_dbl(ct, ~ .x$p.value),
+    p_str = if_else(p_val < 0.001, "p < 0.001", sprintf("p = %.3f", p_val)),
+    label = paste0(protein_label, ":  ρ = ", round(rho, 3), ", ", p_str)
+  )
+
+# --- 3. Color scheme ---
+mod_colors <- c(
+  "Knockout"     = "#d8b365",
+  "Upregulation" = "#5ab4ac",
+  "Control"      = "#000000"
+)
+
+# --- 4. Plot ---
+p <- ggplot(plot_data, aes(x = od_avg, y = qp_avg)) +
+  geom_smooth(method = "lm", se = TRUE,
+              color = "grey30", linewidth = 0.7,
+              fill = "grey70", alpha = 0.2) +
+  geom_point(aes(color = modification), size = 2.2, alpha = 0.85) +
+  geom_text(
+    data = cor_labels,
+    aes(label = label),
+    x = Inf, y = Inf,
+    hjust = 1.05, vjust = 1.5,
+    size = 3.0,
+    color = "black",
+    inherit.aes = FALSE
+  ) +
+  facet_wrap(~ protein_label, nrow = 2, ncol = 2, scales = "free") +
+  scale_color_manual(values = mod_colors, name = "Modification") +
+  labs(
+    x = "OD (48 h)",
+    y = expression(q[p]~"(mg/L/OD/hr)")
+  ) +
+  theme_bw() +
+  theme(
+    strip.background  = element_blank(),
+    strip.text        = element_blank(),
+
+    axis.text         = element_text(size = 10, color = "black"),
+    axis.title        = element_text(size = 12),
+
+    legend.title      = element_text(size = 12, face = "bold"),
+    legend.text       = element_text(size = 10),
+    legend.position   = "bottom",
+    legend.key.size   = unit(0.4, "cm"),
+
+    panel.grid.minor  = element_blank(),
+    panel.grid.major  = element_line(color = "grey90", linewidth = 0.3),
+    panel.border      = element_rect(color = "black", linewidth = 0.5),
+
+    plot.margin       = margin(6, 8, 6, 8, "pt"),
+    panel.spacing     = unit(0.8, "lines")
+  )
+
+print(p)
+
+ggsave("Fig2d.svg", p, width = 7, height = 3, units = "in")
+```
+##3.3 Fig2c titer
+```{r}
+library(tidyverse)
+library(broom)
+library(janitor)
+
+# --- 1. Compute per-row averages and build plot_data_titer ---
+plot_data_titer <- all_data %>%
+  mutate(
+    od_avg    = rowMeans(select(., matches("^od_48hr_\\d+$")), na.rm = TRUE),
+    titer_avg = rowMeans(select(., matches("^titer_\\d+$")), na.rm = TRUE),
+    recombinant_protein = str_to_lower(recombinant_protein)
+  ) %>%
+  filter(is.finite(od_avg), is.finite(titer_avg)) %>%
+  mutate(
+    protein_label = recode(recombinant_protein,
+                           "hsa"         = "HSA",
+                           "rbdj"        = "RBDJ",
+                           "nb3b2"       = "nb3B2",
+                           "trastuzumab" = "Trastuzumab"),
+    protein_label = factor(protein_label, levels = c("nb3B2", "RBDJ", "HSA", "Trastuzumab"))
+  )
+
+# --- 2. Pre-compute Spearman rho and p-value per protein ---
+cor_labels_titer <- plot_data_titer %>%
+  group_by(protein_label) %>%
+  summarise(
+    ct      = list(cor.test(od_avg, titer_avg, method = "spearman")),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    rho   = map_dbl(ct, ~ .x$estimate),
+    p_val = map_dbl(ct, ~ .x$p.value),
+    p_str = if_else(p_val < 0.001, "p < 0.001", sprintf("p = %.3f", p_val)),
+    label = paste0(protein_label, ":  ρ = ", round(rho, 3), ", ", p_str)
+  )
+
+# --- 3. Plot ---
+p_titer <- ggplot(plot_data_titer, aes(x = od_avg, y = titer_avg)) +
+  geom_smooth(method = "lm", se = TRUE,
+              color = "grey30", linewidth = 0.7,
+              fill = "grey70", alpha = 0.2) +
+  geom_point(aes(color = modification), size = 2.2, alpha = 0.85) +
+  geom_text(
+    data = cor_labels_titer,
+    aes(label = label),
+    x = Inf, y = Inf,
+    hjust = 1.05, vjust = 1.5,
+    size = 3.0,
+    color = "black",
+    inherit.aes = FALSE
+  ) +
+  facet_wrap(~ protein_label, nrow = 2, ncol = 2, scales = "free") +
+  scale_color_manual(values = mod_colors, name = "Modification") +
+  labs(
+    x = "OD (48 h)",
+    y = "Titer (mg/L)"
+  ) +
+  theme_bw() +
+  theme(
+    strip.background  = element_blank(),
+    strip.text        = element_blank(),
+
+    axis.text         = element_text(size = 10, color = "black"),
+    axis.title        = element_text(size = 12),
+
+    legend.title      = element_text(size = 12, face = "bold"),
+    legend.text       = element_text(size = 10),
+    legend.position   = "bottom",
+    legend.key.size   = unit(0.4, "cm"),
+
+    panel.grid.minor  = element_blank(),
+    panel.grid.major  = element_line(color = "grey90", linewidth = 0.3),
+    panel.border      = element_rect(color = "black", linewidth = 0.5),
+
+    plot.margin       = margin(6, 8, 6, 8, "pt"),
+    panel.spacing     = unit(0.8, "lines")
+  )
+
+print(p_titer)
+
+#ggsave("Fig_titer_vs_od.svg", p_titer, width = 7, height = 3, units = "in")
+```
+
+##3.4 Supplemental Figure 1
+```{r}
+library(tidyverse)
+
+mod_colors <- c(
+  "Knockout"     = "#d8b365",
+  "Upregulation" = "#5ab4ac",
+  "Control"      = "#000000"
+)
+
+# --- 1. Compute FC average per strain (mean of FC_1, FC_2, FC_3) ---
+plot_data <- AllStrainCultivationResults %>%
+  mutate(
+    FC_avg = rowMeans(select(., matches("^FC_\\d+$")), na.rm = TRUE)
+  ) %>%
+  filter(is.finite(FC_avg))
+
+# --- 2. Reshape the four "*_predicted_change" columns in multimoleculeFSEOF
+#         into long format, one row per gene x protein ---
+fseof_long <- multimoleculeFSEOF %>%
+  select(GQ_names, ends_with("_predicted_change")) %>%
+  pivot_longer(
+    cols = ends_with("_predicted_change"),
+    names_to = "RecombinantProtein",
+    names_pattern = "^(.*)_predicted_change$",
+    values_to = "predicted_change"
+  )
+# NOTE: this assumes the prefixes ("HSA", "RBDJ", "nb3B2", "Trastuzumab")
+# match the RecombinantProtein values in AllStrainCultivationResults exactly
+# (case-sensitive). Adjust the recode below if they don't.
+
+# --- 3. Inner join: keeps only strains whose Gene has a matching entry
+#         (GQ_names) in multimoleculeFSEOF for that specific protein ---
+plot_data <- plot_data %>%
+  inner_join(
+    fseof_long,
+    by = c("Gene" = "GQ_names", "RecombinantProtein" = "RecombinantProtein")
+  ) %>%
+  filter(is.finite(predicted_change)) %>%
+  mutate(
+    RecombinantProtein = factor(RecombinantProtein,
+                                 levels = c("nb3B2", "RBDJ", "HSA", "Trastuzumab"))
+  )
+
+# --- 4. Pre-compute Spearman rho and p-value per protein panel ---
+cor_labels <- plot_data %>%
+  group_by(RecombinantProtein) %>%
+  summarise(
+    ct = list(cor.test(predicted_change, FC_avg, method = "spearman")),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    rho   = map_dbl(ct, ~ .x$estimate),
+    p_val = map_dbl(ct, ~ .x$p.value),
+    p_str = if_else(p_val < 0.001, "p < 0.001", sprintf("p = %.3f", p_val)),
+    label = paste0(RecombinantProtein, ": rho = ", round(rho, 3), ", ", p_str)
+  )
+
+strip_labels <- deframe(cor_labels %>% mutate(RecombinantProtein = as.character(RecombinantProtein)) %>%
+                           select(RecombinantProtein, label))
+
+# --- 5. Plot ---
+p_fc <- ggplot(plot_data, aes(x = predicted_change, y = FC_avg)) +
+  geom_smooth(method = "lm", se = TRUE,
+              color = "grey30", linewidth = 0.7,
+              fill = "grey70", alpha = 0.2) +
+  geom_point(aes(color = Modification), size = 2.2, alpha = 0.85, stroke = 0) +
+  facet_wrap(~ RecombinantProtein, nrow = 2, ncol = 2, scales = "free",
+             labeller = as_labeller(strip_labels)) +
+  labs(
+    x = "Predicted change (FSEOF)",
+    y = "Fold change (FC, avg of replicates)"
+  ) +
+  scale_color_manual(values = mod_colors, name = "Modification") +
+  theme_bw() +
+  theme(
+    strip.background  = element_blank(),
+    strip.text        = element_text(size = 11, face = "plain"),
+    axis.text         = element_text(size = 10, color = "black"),
+    axis.title        = element_text(size = 12),
+    legend.title      = element_text(size = 12, face = "bold"),
+    legend.text       = element_text(size = 10),
+    legend.position   = "bottom",
+    legend.key.size   = unit(0.4, "cm"),
+    panel.grid.minor  = element_blank(),
+    panel.grid.major  = element_line(color = "grey90", linewidth = 0.3),
+    panel.border      = element_rect(color = "black", linewidth = 0.5),
+    plot.margin       = margin(6, 8, 6, 8, "pt"),
+    panel.spacing     = unit(0.8, "lines")
+  )
+
+print(p_fc)
+
+ggsave("multimolecule_FC_vs_predicted_change.svg", p_fc,
+       width = 7, height = 3, units = "in")
+```
+#4. Fig 3
+##4.1 Fig 3b.
+```{r}
+# 1) Load & clean
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(forcats)
+library(ggplot2)
+library(readxl)
+
+multimoleculeFSEOF <- readxl::read_excel(
+  "figure_data/02 Round 2 - Multimolecule FSEOF/Multimolecule_FSEOF_Results.xlsx"
+)
+
+# Palette and ordering
+protein_levels <- c("HSA", "RBDJ", "nb3B2", "Trastuzumab")
+protein_colors <- c(
+  HSA         = "#1b9e77",
+  RBDJ        = "#d95f02",
+  nb3B2       = "#7570b3",
+  Trastuzumab = "#e7298a"
+)
+
+pred_cols <- c("HSA_predicted_change",
+               "RBDJ_predicted_change",
+               "nb3B2_predicted_change",
+               "Trastuzumab_predicted_change")
+
+df0 <- multimoleculeFSEOF
+
+# Knockout flag (case-insensitive)
+df1 <- df0 %>%
+  mutate(is_knockout = str_detect(tolower(coalesce(category, "")), "knockout"))
+
+# Sign-flip per-protein values for knockouts (NOT the original avg column)
+df2 <- df1 %>%
+  mutate(across(all_of(pred_cols), ~ ifelse(is_knockout, -., .), .names = "{.col}_adj"))
+
+adj_cols <- paste0(pred_cols, "_adj")
+
+# Keep same subset as before, but compute sign-flipped average for plotting the bars
+topN <- df2 %>%
+  arrange(avg_predicted_change) %>%       # same selection criterion as your original code
+  slice_head(n = 60) %>%
+  mutate(
+    GeneLabel    = FinalAnnotation,
+    avg_flipped  = rowMeans(select(., all_of(adj_cols)), na.rm = TRUE)  # bar value
+  )
+
+# Establish a common GeneLabel order using the sign-flipped average
+gene_order <- topN %>%
+  arrange(avg_flipped) %>%
+  pull(GeneLabel)
+
+gene_order <- rev(gene_order)
+
+
+# Long data for the points (per-protein, already sign-flipped in *_adj)
+long_dat <- topN %>%
+  select(GeneLabel, all_of(adj_cols)) %>%
+  pivot_longer(
+    cols = all_of(adj_cols),
+    names_to = "protein_adj",
+    values_to = "predicted_change"
+  ) %>%
+  mutate(
+    protein   = str_remove(protein_adj, "_predicted_change_adj$"),
+    protein   = factor(protein, levels = protein_levels),
+    GeneLabel = factor(GeneLabel, levels = gene_order)
+  )
+
+# Data for single bars (sign-flipped average)
+avg_dat <- topN %>%
+  select(GeneLabel, avg_flipped) %>%
+  mutate(GeneLabel = factor(GeneLabel, levels = gene_order))
+
+# Plot: single avg (flipped) bar + per-protein points (flipped), aligned by common factor
+set.seed(123)
+fig3b <- ggplot(avg_dat, aes(x = GeneLabel, y = avg_flipped)) +
+  geom_hline(yintercept = 0, linetype = "dashed", linewidth = 0.3, color = "grey50") +
+  geom_col(fill = "grey85", width = 0.8) +
+  geom_point(
+    data = long_dat,
+    aes(y = predicted_change, color = protein),
+    position = position_jitter(width = 0.18, height = 0),
+    size = 1.9, alpha = 0.9
+  ) +
+  labs(
+    x = NULL,
+    y = "Predicted change (bar = sign-flipped avg; points = sign-flipped per protein)",
+    color = "Recombinant protein"
+  ) +
+  theme_bw(base_size = 12) +
+  theme(
+    panel.grid.major.y = element_blank(),
+    axis.text.y = element_text(size = 9),
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = 'none',
+  ) +
+  scale_color_manual(values = protein_colors, breaks = protein_levels)
+
+fig3b
+ggsave('Fig3b.svg', fig3b, width = 6, height = 2, units = "in")
+
+```
+##4.2. Fig3b.
+```{r}
+# Packages
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(purrr)
+library(forcats)
+library(ggplot2)
+library(clusterProfiler)
+
+# -------------------------
+# CONFIG (edit as needed)
+# -------------------------
+GO_file    <- "figure_data/goSLIMmod.gmt"
+pred_cols  <- c("HSA_predicted_change",
+                "RBDJ_predicted_change",
+                "nb3B2_predicted_change",
+                "Trastuzumab_predicted_change")
+minGSSize  <- 5
+maxGSSize  <- 5000
+top_terms  <- 25
+set.seed(1234)
+
+# ---------------------------------------------------------
+# 1) Build avg_percentile per gene (Knockout rows sign-flip)
+# ---------------------------------------------------------
+df <- multimoleculeFSEOF %>%
+  mutate(
+    is_knockout = str_detect(tolower(coalesce(category, "")), "knockout")
+  ) %>%
+  mutate(across(all_of(pred_cols), as.numeric)) %>%
+  mutate(across(
+    all_of(pred_cols),
+    ~ ifelse(is_knockout, -., .),
+    .names = "{.col}_adj"
+  ))
+
+adj_cols <- paste0(pred_cols, "_adj")
+
+# Percentiles per protein (0..100), then average across proteins
+df_pct <- df %>%
+  mutate(across(all_of(adj_cols),
+                ~ dplyr::percent_rank(.) * 100,
+                .names = "{.col}_pct")) %>%
+  mutate(
+    avg_percentile = rowMeans(across(ends_with("_adj_pct")), na.rm = TRUE)
+  )
+
+# -------------------------------------------------------------
+# 2) Prepare the ranked vector for GSEA (named numeric vector)
+#    - keep one value per GQ_names (use max if duplicated)
+#    - intersect with GMT genes
+# -------------------------------------------------------------
+# Read GMT (TERM2GENE)
+gmt_df <- clusterProfiler::read.gmt(GO_file) %>%
+  rename(term = term, gene = gene)
+
+# Collapse duplicates by max percentile (you can switch to mean if preferred)
+gene_scores <- df_pct %>%
+  filter(!is.na(GQ_names), !is.na(avg_percentile)) %>%
+  group_by(GQ_names) %>%
+  summarise(avg_percentile = max(avg_percentile), .groups = "drop")
+
+# Intersect with genes in GMT universe
+universe <- intersect(gene_scores$GQ_names, unique(gmt_df$gene))
+gene_scores <- gene_scores %>% filter(GQ_names %in% universe)
+
+# Named numeric vector, sorted decreasing (required by GSEA)
+geneList <- gene_scores$avg_percentile
+names(geneList) <- gene_scores$GQ_names
+geneList <- sort(geneList, decreasing = TRUE)
+
+# --------------------------
+# 3) Run GSEA with GMT sets
+# --------------------------
+gsea_res <- GSEA(
+  geneList      = geneList,
+  TERM2GENE     = gmt_df %>% select(term, gene),
+  pAdjustMethod = "BH",
+  minGSSize     = minGSSize,
+  maxGSSize     = maxGSSize,
+  verbose       = FALSE,
+  seed          = TRUE
+)
+
+# Early exit if nothing enriched
+if (is.null(gsea_res) || nrow(as.data.frame(gsea_res)) == 0) {
+  message("No enriched terms found with current parameters.")
+} else {
+  res <- as.data.frame(gsea_res) %>%
+    transmute(
+      term_id      = ID,
+      term_name    = Description,
+      set_size_bg  = setSize,     # size inside the tested universe
+      NES          = NES,
+      pval         = pvalue,
+      FDR          = p.adjust,
+      core_enrich  = core_enrichment   # "/" separated leading-edge genes
+    )
+
+  # -------------------------------------------------------
+  # 4) Compute each term's mean avg_percentile (x-axis)
+  #    over all term genes present in the universe
+  # -------------------------------------------------------
+  # Map term -> all member genes (restricted to our universe)
+  term2genes <- gmt_df %>%
+    filter(gene %in% universe) %>%
+    group_by(term) %>%
+    summarise(genes = list(unique(gene)), .groups = "drop")
+
+  # Quick look-up table: gene -> avg_percentile
+  gene2pct <- tibble(
+    GQ_names = names(geneList),
+    avg_percentile = as.numeric(geneList)
+  )
+
+  res_aug <- res %>%
+    left_join(term2genes, by = c("term_name" = "term")) %>%
+    mutate(
+      term_genes_present = map_int(genes, ~ sum(.x %in% gene2pct$GQ_names)),
+      term_avg_percentile = map_dbl(
+        genes,
+        ~ gene2pct %>% filter(GQ_names %in% .x) %>%
+            summarise(m = mean(avg_percentile, na.rm = TRUE)) %>%
+            pull(m) %>% { ifelse(length(.) == 0, NA_real_, .) }
+      ),
+      neglogFDR = -log10(FDR)
+    ) %>%
+    # pick top terms by FDR; then order by x for plotting
+    arrange(FDR, desc(neglogFDR)) %>%
+    slice_head(n = top_terms) %>%
+    arrange(term_avg_percentile) %>%
+    mutate(term_name = fct_inorder(term_name))
+
+  # ----------------------
+  # 5) Dotplot visualization
+  # ----------------------
+  fig3c <- ggplot(res_aug,
+         aes(x = term_avg_percentile,
+             y = term_name,
+             size = term_genes_present,
+             color = neglogFDR)) +
+    geom_point() +
+    labs(
+      x = "Average percentile score of gene set",
+      y = NULL,
+      size = "# genes in set",
+      color = expression(-log[10](FDR)),
+      title = "GSEA on GO-SLIM (rank: avg_percentile)",
+      subtitle = paste0("Universe: ", length(universe), " genes; Showing top ", top_terms)
+    ) +
+    theme_bw(base_size = 12)+ 
+  scale_color_gradient(low = "#400045", high = "#d8b365")
+}
+fig3c
+ggsave('Fig3c.svg', fig3c, width = 4.5, height = 2.5, units = "in")
+```
+
+##4.3. Fig 3c.
+```{r}
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(tidyr)
+  library(stringr)
+  library(ggplot2)
+  library(purrr)
+  library(patchwork)
+})
+
+# ---------------------------
+# Inputs you may tweak
+# ---------------------------
+fc_columns <- c("FC_1", "FC_2", "FC_3")
+od_columns <- c("OD_48hr_1", "OD_48hr_2", "OD_48hr_3")
+
+rp_order <- c("Trastuzumab", "HSA", "RBDJ", "nb3B2")  # (5)
+control_label <- "Control"
+
+# ---------------------------
+# Helpers
+# ---------------------------
+map_modification <- function(x) {
+  dplyr::case_when(
+    x %in% c("Upregulation", "Mixed, Upregulation") ~ "Upregulation",
+    x %in% c("Knockout", "Mixed, Knockout")         ~ "Knockout",
+    TRUE                                            ~ x
+  )
+}
+
+make_label <- function(mod_key, label_src, control_label = "Control", delta_symbol = "\u0394") {
+  dplyr::case_when(
+    mod_key == "CONTROL"      ~ control_label,
+    mod_key == "UPREGULATION" ~ paste0(label_src),
+    mod_key == "KNOCKOUT"     ~ paste0(label_src),
+    TRUE ~ label_src
+  )
+}
+
+repcols_for_base <- function(df, base_vec) {
+  # Allow explicit vector of columns or a base name pattern
+  if (length(base_vec) == 1 && !base_vec %in% names(df)) {
+    grep(paste0("^", base_vec, "_\\d+$"), names(df), value = TRUE)
+  } else {
+    base_vec
+  }
+}
+
+# BH-adjusted Welch t-tests vs Control, within each RP
+# 1) Remove any stale versions from your session
+suppressWarnings(rm(compute_stats_vs_control))
+suppressWarnings(rm(prepare_heatmap_data))
+
+# 2) Re-define the helpers (no `.label` anywhere)
+
+# ---------- Robust stats helper (no .label anywhere) ----------
+compute_stats_vs_control <- function(df_long, control_label, test_side = c("greater","two.sided")) {
+  side <- match.arg(test_side)
+
+  # Short-circuit: if df_long is empty, return empty tibble with right columns
+  if (nrow(df_long) == 0) {
+    return(tibble::tibble(RecombinantProtein=character(), FinalAnnotation_label=character(), sig=character()))
+  }
+
+  df_long %>%
+    dplyr::group_by(RecombinantProtein) %>%
+    dplyr::group_modify(function(d, key) {
+      # controls (may be 0-length; then we can't test)
+      ctrl_vals <- d %>%
+        dplyr::filter(FinalAnnotation_label == control_label) %>%
+        dplyr::pull(value) %>%
+        stats::na.omit()
+
+      tbl <- d %>%
+        dplyr::group_by(FinalAnnotation_label) %>%
+        dplyr::summarise(vals = list(stats::na.omit(value)), .groups = "drop") %>%
+        dplyr::mutate(
+          pval = purrr::map2_dbl(vals, FinalAnnotation_label, ~{
+            if (.y == control_label || length(ctrl_vals) < 2 || length(.x) < 2) return(NA_real_)
+            tryCatch(
+              stats::t.test(.x, ctrl_vals, var.equal = FALSE, alternative = side)$p.value,
+              error = function(e) NA_real_
+            )
+          })
+        )
+
+      non_ctrl <- !is.na(tbl$pval) & tbl$FinalAnnotation_label != control_label
+      tbl$FDR <- NA_real_
+      if (any(non_ctrl)) tbl$FDR[non_ctrl] <- p.adjust(tbl$pval[non_ctrl], method = "BH")
+
+      tbl %>%
+        dplyr::mutate(sig = dplyr::case_when(
+          is.na(FDR)  ~ "",
+          FDR < 0.001 ~ "***",
+          FDR < 0.01  ~ "**",
+          FDR < 0.05  ~ "*",
+          TRUE        ~ ""
+        )) %>%
+        dplyr::select(FinalAnnotation_label, sig)
+    }) %>%
+    dplyr::ungroup() %>%
+    dplyr::select(RecombinantProtein, FinalAnnotation_label, sig)
+}
+
+# ---------- Hardened data prep (guards + clear errors) ----------
+# returns a list: list(agg=<data>, x_levels=<char>, axis_label_colors=<named char>)
+prepare_heatmap_data <- function(cultivation_data, feature_data, value_columns,
+                                 test_side, control_label) {
+  map_modification <- function(x) dplyr::case_when(
+    x %in% c("Upregulation", "Mixed, Upregulation") ~ "Upregulation",
+    x %in% c("Knockout", "Mixed, Knockout")         ~ "Knockout",
+    TRUE                                            ~ x
+  )
+  make_label <- function(mod_key, label_src, control_label = "Control", delta_symbol = "\u0394") {
+    up_arrow <- "↑"; Encoding(up_arrow) <- "UTF-8"
+    dplyr::case_when(
+      mod_key == "CONTROL"      ~ control_label,
+      mod_key == "UPREGULATION" ~ paste0(label_src),
+      mod_key == "KNOCKOUT"     ~ paste0(label_src),
+      TRUE ~ label_src
+    )
+  }
+
+  # map + join to bring in FinalAnnotation + avg_predicted_change
+  feat_mapped <- feature_data %>%
+    dplyr::mutate(Modification_mapped = map_modification(category)) %>%
+    dplyr::select(GQ_names, Modification_mapped, FinalAnnotation, avg_predicted_change)
+
+  merged <- cultivation_data %>%
+    dplyr::select(-FinalAnnotation) %>%
+    dplyr::left_join(
+      feat_mapped,
+      by = c("Gene" = "GQ_names", "Modification" = "Modification_mapped")
+    )
+
+  # label building (keep annotated rows OR Control)
+  df_lab0 <- merged %>%
+    dplyr::filter(!is.na(FinalAnnotation) | Modification == control_label) %>%
+    dplyr::mutate(
+      mod_key = toupper(trimws(Modification)),
+      FinalAnnotation_label = make_label(mod_key, FinalAnnotation, control_label)
+    )
+
+  # ---------- (1) Prefilter: keep only genes with data for ALL 4 RPs ----------
+  # Use the replicate columns you are plotting; require at least one non-NA per (RP, label)
+  rep_cols <- value_columns
+  complete_labels <- df_lab0 %>%
+    dplyr::filter(mod_key != "CONTROL", !is.na(FinalAnnotation)) %>%        # evaluate on non-controls
+    dplyr::rowwise() %>%
+    dplyr::mutate(has_any = any(!is.na(c_across(all_of(rep_cols))))) %>%
+    dplyr::ungroup() %>%
+    dplyr::filter(has_any) %>%
+    dplyr::distinct(FinalAnnotation_label, RecombinantProtein) %>%
+    dplyr::add_count(FinalAnnotation_label, name = "rp_count") %>%
+    dplyr::filter(rp_count >= 4) %>%                                        # must have all 4 RPs
+    dplyr::pull(FinalAnnotation_label) %>% unique()
+
+  df_lab <- df_lab0 %>%
+    dplyr::filter(FinalAnnotation_label %in% complete_labels | mod_key == "CONTROL")
+
+  # Long layout
+  long <- df_lab %>%
+    dplyr::select(RecombinantProtein, FinalAnnotation_label, mod_key, dplyr::all_of(rep_cols)) %>%
+    tidyr::pivot_longer(cols = dplyr::all_of(rep_cols), names_to = "rep", values_to = "value") %>%
+    dplyr::filter(!is.na(value))
+
+  # Means per cell
+  means <- long %>%
+    dplyr::group_by(RecombinantProtein, FinalAnnotation_label) %>%
+    dplyr::summarise(mean_val = mean(value, na.rm = TRUE), .groups = "drop")
+
+  # Stats vs control (within RP)
+  stats <- compute_stats_vs_control(
+    df_long       = long,
+    control_label = control_label,
+    test_side     = test_side
+  )
+
+  agg <- means %>%
+    dplyr::left_join(stats, by = c("RecombinantProtein","FinalAnnotation_label")) %>%
+    dplyr::mutate(sig = dplyr::coalesce(sig, ""), n_stars = nchar(sig))
+
+  # ---------- (6) X-order: Control first, then ascending avg_predicted_change ----------
+  x_order_tbl <- df_lab %>%
+    dplyr::distinct(FinalAnnotation_label, mod_key, avg_predicted_change) %>%
+    dplyr::group_by(FinalAnnotation_label, mod_key) %>%
+    dplyr::summarise(avg_predicted_change = suppressWarnings(dplyr::first(na.omit(avg_predicted_change))), .groups = "drop") %>%
+    dplyr::mutate(avg_predicted_change = ifelse(mod_key == "CONTROL", NA_real_, avg_predicted_change))
+
+  non_ctrl_x <- x_order_tbl %>%
+    dplyr::filter(mod_key != "CONTROL") %>%
+    dplyr::arrange(avg_predicted_change) %>%
+    dplyr::pull(FinalAnnotation_label)
+
+  x_levels <- c(control_label, setdiff(non_ctrl_x, control_label))
+  agg$FinalAnnotation_label <- factor(agg$FinalAnnotation_label, levels = x_levels)
+
+  # ---------- (5) RP order ----------
+  rp_order <- c("Trastuzumab", "HSA", "RBDJ", "nb3B2")
+  agg$RecombinantProtein <- factor(agg$RecombinantProtein, levels = rp_order)
+
+  # ---------- (4) Build tick-label colors by modification ----------
+  # Same scheme as your earlier figure: Upreg=#5ab4ac, KO=#d8b365, Control=black
+  label_mod_map <- df_lab %>% dplyr::distinct(FinalAnnotation_label, mod_key)
+  axis_label_colors <- setNames(
+    dplyr::case_when(
+      label_mod_map$mod_key == "UPREGULATION" ~ "#5ab4ac",
+      label_mod_map$mod_key == "KNOCKOUT"     ~ "#d8b365",
+      TRUE                                     ~ "#000000"
+    ),
+    label_mod_map$FinalAnnotation_label
+  )
+
+  list(agg = agg, x_levels = x_levels, axis_label_colors = axis_label_colors)
+}
+
+
+
+# Draw heatmap with stacked stars and custom anchors
+# REPLACE your current plot_sig_heatmap() with this version
+# Drop-in replacement for plot_sig_heatmap()
+plot_sig_heatmap <- function(agg, fill_name, anchor_vals, anchor_cols,
+                             x_levels = NULL, axis_label_colors = NULL) {
+  stopifnot(length(anchor_vals) == length(anchor_cols))
+  ggtext_available <- requireNamespace("ggtext", quietly = TRUE)
+
+  # --- detect x column ---
+  x_col <- if ("FinalAnnotation_label" %in% names(agg)) "FinalAnnotation_label" else
+           if ("Gene_label" %in% names(agg))            "Gene_label"            else
+           stop("plot_sig_heatmap(): expected a column named FinalAnnotation_label or Gene_label")
+
+  # apply x_levels if provided
+  if (!is.null(x_levels)) {
+    agg[[x_col]] <- factor(agg[[x_col]], levels = x_levels)
+  }
+
+  max_val <- max(agg$mean_val, na.rm = TRUE)
+  if (!is.finite(max_val) || max_val <= 0) max_val <- 1e-8
+
+  vals <- pmax(pmin(anchor_vals / max_val, 1), 0)
+  vals <- sort(unique(vals))
+
+  # build centered multi-line star labels safely
+  stars_df <- agg %>%
+    dplyr::mutate(
+      n_stars_san = dplyr::case_when(
+        is.na(n_stars) ~ 0L, n_stars < 0 ~ 0L, TRUE ~ as.integer(round(n_stars))
+      ),
+      n_stars_san = pmin(3L, n_stars_san),
+      sig_stack = vapply(n_stars_san, function(k) if (k <= 0L) "" else paste(rep("*", k), collapse = "\n"),
+                         FUN.VALUE = character(1))
+    )
+
+  star_size       <- 10/2.845
+  star_lineheight <- 0.4
+
+  # colored x tick labels (if provided)
+  labels_arg <- waiver()
+  if (!is.null(axis_label_colors) && ggtext_available) {
+    levs <- levels(agg[[x_col]])
+    # if not factored yet, derive levels from unique order
+    if (is.null(levs)) levs <- unique(agg[[x_col]])
+    lbls <- as.character(levs)
+    lbls_html <- lbls
+    cols <- axis_label_colors[levs]; cols[is.na(cols)] <- "#000000"
+    labels_arg <- setNames(
+      paste0("<span style='color:", cols, "'>", lbls_html, "</span>"),
+      levs
+    )
+  }
+
+  ggplot(agg, aes(x = .data[[x_col]], y = RecombinantProtein, fill = mean_val)) +
+    geom_tile(color = NA) +
+    scale_fill_gradientn(colors = anchor_cols, values = vals, limits = c(0, max_val), name = fill_name) +
+    geom_text(
+      data = stars_df %>% dplyr::filter(sig_stack != ""),
+      aes(x = .data[[x_col]], label = sig_stack),
+      hjust = 0.5, vjust = 0.5,
+      lineheight = star_lineheight,
+      size = star_size
+    ) +
+    labs(x = NULL, y = NULL) +
+    theme_bw() +
+    theme(
+      panel.grid = element_blank(),
+      axis.text.x = if (!is.null(axis_label_colors) && ggtext_available)
+        ggtext::element_markdown(angle = 90, hjust = 1, vjust = 1, size = 10)
+      else
+        element_text(angle = 90, hjust = 1, vjust = 1, size = 10),
+      axis.text.y = element_text(size = 10),
+      legend.title = element_text(size = 10),
+      legend.text  = element_text(size = 10),
+      plot.title = element_blank(),
+      axis.title.x = element_blank(),
+      axis.title.y = element_blank()
+    ) +
+    scale_x_discrete(labels = labels_arg, drop = FALSE) +
+    scale_y_discrete(drop = FALSE)
+}
+
+
+
+
+# ---------------------------
+# Build FC heatmap (1), (2), (3)
+# ---------------------------
+# FC
+fc_prep <- prepare_heatmap_data(
+  AllStrainCultivationResults, multimoleculeFSEOF, fc_columns, "greater", control_label
+)
+fc_plot <- plot_sig_heatmap(
+  agg = fc_prep$agg,
+  fill_name  = "mean(FC)",
+  anchor_vals = c(0, 1, max(fc_prep$agg$mean_val, na.rm = TRUE)),
+  anchor_cols = c("#ffffff", "#ffffe5", "#005a32"),
+  x_levels = fc_prep$x_levels,
+  axis_label_colors = fc_prep$axis_label_colors
+)
+
+
+
+# OD — (2) darker blues for mean/max to enhance contrast below mean
+# Use: 0->white, mean(control)->"#2b8cbe" (darker mid), max->"#08306b" (darker high)
+od_prep <- prepare_heatmap_data(
+  AllStrainCultivationResults, multimoleculeFSEOF, od_columns, "two.sided", control_label
+)
+
+ctrl_od_vals <- AllStrainCultivationResults %>%
+  dplyr::mutate(Modification = dplyr::case_when(
+    Modification %in% c("Upregulation","Mixed, Upregulation") ~ "Upregulation",
+    Modification %in% c("Knockout","Mixed, Knockout") ~ "Knockout",
+    TRUE ~ Modification
+  )) %>%
+  dplyr::filter(Modification == control_label) %>%
+  dplyr::select(dplyr::all_of(od_columns)) %>%
+  as.matrix() %>% as.numeric() %>% stats::na.omit()
+
+ctrl_od_mean <- if (length(ctrl_od_vals)) mean(ctrl_od_vals) else 0
+
+od_plot <- plot_sig_heatmap(
+  agg = od_prep$agg,
+  fill_name  = "mean(OD 48h)",
+  anchor_vals = c(min(od_prep$agg$mean_val, na.rm = TRUE), ctrl_od_mean, max(od_prep$agg$mean_val, na.rm = TRUE)),
+  anchor_cols = c("#ffffff", "#a6bddb", "#2b8cbe"),
+  x_levels = od_prep$x_levels,
+  axis_label_colors = od_prep$axis_label_colors
+)
+
+
+# Stack: strip x-axis from top, no titles, no y-titles
+fc_plot_stripped <- fc_plot +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
+
+final_combo <- (fc_plot_stripped / od_plot) + patchwork::plot_layout(heights = c(1, 1))
+final_combo
+# Save (since your viewer is finicky)
+ggplot2::ggsave("Fig3c.svg", final_combo, width = 8, height = 3.5, units = "in")
+#ggplot2::ggsave("fc_od_heatmaps.png", final_combo, width = 8, height = 6, units = "in", dpi = 300)
+
+```
+
+##4.4 Fig 3b/d
+```{r}
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(tidyr)
+  library(stringr)
+  library(ggplot2)
+  library(purrr)
+  library(patchwork)
+  library(readxl)
+})
+
+# Read data
+multimoleculeFSEOF <- readxl::read_excel(
+  "figure_data/02 Round 2 - Multimolecule FSEOF/Multimolecule_FSEOF_Results.xlsx"
+)
+
+# ---------------------------
+# Inputs
+# ---------------------------
+fc_columns <- c("FC_1", "FC_2", "FC_3")
+od_columns <- c("OD_48hr_1", "OD_48hr_2", "OD_48hr_3")
+rp_order <- c("Trastuzumab", "HSA", "RBDJ", "nb3B2")
+control_label <- "Control"
+
+# Barplot colors
+protein_levels <- c("HSA", "RBDJ", "nb3B2", "Trastuzumab")
+protein_colors <- c(
+  HSA         = "#1b9e77",
+  RBDJ        = "#d95f02",
+  nb3B2       = "#7570b3",
+  Trastuzumab = "#e7298a"
+)
+
+# ---------------------------
+# Helpers
+# ---------------------------
+map_modification <- function(x) {
+  dplyr::case_when(
+    x %in% c("Upregulation", "Mixed, Upregulation") ~ "Upregulation",
+    x %in% c("Knockout", "Mixed, Knockout")         ~ "Knockout",
+    TRUE                                            ~ x
+  )
+}
+
+make_label <- function(mod_key, label_src, control_label = "Control", delta_symbol = "\u0394") {
+  dplyr::case_when(
+    mod_key == "CONTROL"      ~ control_label,
+    mod_key == "UPREGULATION" ~ paste0(label_src),
+    mod_key == "KNOCKOUT"     ~ paste0(label_src),
+    TRUE ~ label_src
+  )
+}
+
+compute_stats_vs_control <- function(df_long, control_label, test_side = c("greater","two.sided")) {
+  side <- match.arg(test_side)
+  if (nrow(df_long) == 0) {
+    return(tibble::tibble(RecombinantProtein=character(), FinalAnnotation_label=character(), sig=character()))
+  }
+  
+  df_long %>%
+    dplyr::group_by(RecombinantProtein) %>%
+    dplyr::group_modify(function(d, key) {
+      ctrl_vals <- d %>%
+        dplyr::filter(FinalAnnotation_label == control_label) %>%
+        dplyr::pull(value) %>%
+        stats::na.omit()
+      
+      tbl <- d %>%
+        dplyr::group_by(FinalAnnotation_label) %>%
+        dplyr::summarise(vals = list(stats::na.omit(value)), .groups = "drop") %>%
+        dplyr::mutate(
+          pval = purrr::map2_dbl(vals, FinalAnnotation_label, ~{
+            if (.y == control_label || length(ctrl_vals) < 2 || length(.x) < 2) return(NA_real_)
+            tryCatch(
+              stats::t.test(.x, ctrl_vals, var.equal = FALSE, alternative = side)$p.value,
+              error = function(e) NA_real_
+            )
+          })
+        )
+      
+      non_ctrl <- !is.na(tbl$pval) & tbl$FinalAnnotation_label != control_label
+      tbl$FDR <- NA_real_
+      if (any(non_ctrl)) tbl$FDR[non_ctrl] <- p.adjust(tbl$pval[non_ctrl], method = "BH")
+      
+      tbl %>%
+        dplyr::mutate(sig = dplyr::case_when(
+          is.na(FDR)  ~ "",
+          FDR < 0.001 ~ "***",
+          FDR < 0.01  ~ "**",
+          FDR < 0.05  ~ "*",
+          TRUE        ~ ""
+        )) %>%
+        dplyr::select(FinalAnnotation_label, sig)
+    }) %>%
+    dplyr::ungroup() %>%
+    dplyr::select(RecombinantProtein, FinalAnnotation_label, sig)
+}
+
+prepare_heatmap_data <- function(cultivation_data, feature_data, value_columns,
+                                 test_side, control_label) {
+  map_modification <- function(x) dplyr::case_when(
+    x %in% c("Upregulation", "Mixed, Upregulation") ~ "Upregulation",
+    x %in% c("Knockout", "Mixed, Knockout")         ~ "Knockout",
+    TRUE                                            ~ x
+  )
+  make_label <- function(mod_key, label_src, control_label = "Control", delta_symbol = "\u0394") {
+    up_arrow <- "↑"; Encoding(up_arrow) <- "UTF-8"
+    dplyr::case_when(
+      mod_key == "CONTROL"      ~ control_label,
+      mod_key == "UPREGULATION" ~ paste0(label_src),
+      mod_key == "KNOCKOUT"     ~ paste0(label_src),
+      TRUE ~ label_src
+    )
+  }
+  
+  feat_mapped <- feature_data %>%
+    dplyr::mutate(Modification_mapped = map_modification(category)) %>%
+    dplyr::select(GQ_names, Modification_mapped, FinalAnnotation, avg_predicted_change)
+  
+  merged <- cultivation_data %>%
+    dplyr::select(-FinalAnnotation) %>%
+    dplyr::left_join(
+      feat_mapped,
+      by = c("Gene" = "GQ_names", "Modification" = "Modification_mapped")
+    )
+  
+  df_lab0 <- merged %>%
+    dplyr::filter(!is.na(FinalAnnotation) | Modification == control_label) %>%
+    dplyr::mutate(
+      mod_key = toupper(trimws(Modification)),
+      FinalAnnotation_label = make_label(mod_key, FinalAnnotation, control_label)
+    )
+  
+  rep_cols <- value_columns
+  complete_labels <- df_lab0 %>%
+    dplyr::filter(mod_key != "CONTROL", !is.na(FinalAnnotation)) %>%
+    dplyr::rowwise() %>%
+    dplyr::mutate(has_any = any(!is.na(c_across(all_of(rep_cols))))) %>%
+    dplyr::ungroup() %>%
+    dplyr::filter(has_any) %>%
+    dplyr::distinct(FinalAnnotation_label, RecombinantProtein) %>%
+    dplyr::add_count(FinalAnnotation_label, name = "rp_count") %>%
+    dplyr::filter(rp_count >= 4) %>%
+    dplyr::pull(FinalAnnotation_label) %>% unique()
+  
+  df_lab <- df_lab0 %>%
+    dplyr::filter(FinalAnnotation_label %in% complete_labels | mod_key == "CONTROL")
+  
+  long <- df_lab %>%
+    dplyr::select(RecombinantProtein, FinalAnnotation_label, mod_key, dplyr::all_of(rep_cols)) %>%
+    tidyr::pivot_longer(cols = dplyr::all_of(rep_cols), names_to = "rep", values_to = "value") %>%
+    dplyr::filter(!is.na(value))
+  
+  means <- long %>%
+    dplyr::group_by(RecombinantProtein, FinalAnnotation_label) %>%
+    dplyr::summarise(mean_val = mean(value, na.rm = TRUE), .groups = "drop")
+  
+  stats <- compute_stats_vs_control(
+    df_long       = long,
+    control_label = control_label,
+    test_side     = test_side
+  )
+  
+  agg <- means %>%
+    dplyr::left_join(stats, by = c("RecombinantProtein","FinalAnnotation_label")) %>%
+    dplyr::mutate(sig = dplyr::coalesce(sig, ""), n_stars = nchar(sig))
+  
+  x_order_tbl <- df_lab %>%
+    dplyr::distinct(FinalAnnotation_label, mod_key, avg_predicted_change) %>%
+    dplyr::group_by(FinalAnnotation_label, mod_key) %>%
+    dplyr::summarise(avg_predicted_change = suppressWarnings(dplyr::first(na.omit(avg_predicted_change))), .groups = "drop") %>%
+    dplyr::mutate(avg_predicted_change = ifelse(mod_key == "CONTROL", NA_real_, avg_predicted_change))
+  
+  non_ctrl_x <- x_order_tbl %>%
+    dplyr::filter(mod_key != "CONTROL") %>%
+    dplyr::arrange(avg_predicted_change) %>%
+    dplyr::pull(FinalAnnotation_label)
+  
+  x_levels <- c(control_label, setdiff(non_ctrl_x, control_label))
+  agg$FinalAnnotation_label <- factor(agg$FinalAnnotation_label, levels = x_levels)
+  agg$RecombinantProtein <- factor(agg$RecombinantProtein, levels = rp_order)
+  
+  label_mod_map <- df_lab %>% dplyr::distinct(FinalAnnotation_label, mod_key)
+  axis_label_colors <- setNames(
+    dplyr::case_when(
+      label_mod_map$mod_key == "UPREGULATION" ~ "#5ab4ac",
+      label_mod_map$mod_key == "KNOCKOUT"     ~ "#d8b365",
+      TRUE                                     ~ "#000000"
+    ),
+    label_mod_map$FinalAnnotation_label
+  )
+  
+  list(agg = agg, x_levels = x_levels, axis_label_colors = axis_label_colors)
+}
+
+plot_sig_heatmap <- function(agg, fill_name, anchor_vals, anchor_cols,
+                             x_levels = NULL, axis_label_colors = NULL) {
+  stopifnot(length(anchor_vals) == length(anchor_cols))
+  ggtext_available <- requireNamespace("ggtext", quietly = TRUE)
+  
+  x_col <- if ("FinalAnnotation_label" %in% names(agg)) "FinalAnnotation_label" else
+           if ("Gene_label" %in% names(agg))            "Gene_label"            else
+           stop("plot_sig_heatmap(): expected a column named FinalAnnotation_label or Gene_label")
+  
+  if (!is.null(x_levels)) {
+    agg[[x_col]] <- factor(agg[[x_col]], levels = x_levels)
+  }
+  
+  max_val <- max(agg$mean_val, na.rm = TRUE)
+  if (!is.finite(max_val) || max_val <= 0) max_val <- 1e-8
+  
+  vals <- pmax(pmin(anchor_vals / max_val, 1), 0)
+  vals <- sort(unique(vals))
+  
+  stars_df <- agg %>%
+    dplyr::mutate(
+      n_stars_san = dplyr::case_when(
+        is.na(n_stars) ~ 0L, n_stars < 0 ~ 0L, TRUE ~ as.integer(round(n_stars))
+      ),
+      n_stars_san = pmin(3L, n_stars_san),
+      sig_stack = vapply(n_stars_san, function(k) if (k <= 0L) "" else paste(rep("*", k), collapse = "\n"),
+                         FUN.VALUE = character(1))
+    )
+  
+  star_size       <- 10/2.845
+  star_lineheight <- 0.4
+  
+  labels_arg <- waiver()
+  if (!is.null(axis_label_colors) && ggtext_available) {
+    levs <- levels(agg[[x_col]])
+    if (is.null(levs)) levs <- unique(agg[[x_col]])
+    lbls <- as.character(levs)
+    lbls_html <- lbls
+    cols <- axis_label_colors[levs]; cols[is.na(cols)] <- "#000000"
+    labels_arg <- setNames(
+      paste0("<span style='color:", cols, "'>", lbls_html, "</span>"),
+      levs
+    )
+  }
+  
+  ggplot(agg, aes(x = .data[[x_col]], y = RecombinantProtein, fill = mean_val)) +
+    geom_tile(color = NA) +
+    scale_fill_gradientn(colors = anchor_cols, values = vals, limits = c(0, max_val), name = fill_name) +
+    geom_text(
+      data = stars_df %>% dplyr::filter(sig_stack != ""),
+      aes(x = .data[[x_col]], label = sig_stack),
+      hjust = 0.5, vjust = 0.5,
+      lineheight = star_lineheight,
+      size = star_size
+    ) +
+    labs(x = NULL, y = NULL) +
+    theme_bw() +
+    theme(
+      panel.grid = element_blank(),
+      axis.text.x = if (!is.null(axis_label_colors) && ggtext_available)
+        ggtext::element_markdown(angle = 90, hjust = 1, vjust = 1, size = 10)
+      else
+        element_text(angle = 90, hjust = 1, vjust = 1, size = 10),
+      axis.text.y = element_text(size = 10),
+      legend.title = element_text(size = 10),
+      legend.text  = element_text(size = 10),
+      plot.title = element_blank(),
+      axis.title.x = element_blank(),
+      axis.title.y = element_blank()
+    ) +
+    scale_x_discrete(labels = labels_arg, drop = FALSE) +
+    scale_y_discrete(drop = FALSE)
+}
+
+# ---------------------------
+# Build FC and OD heatmaps
+# ---------------------------
+fc_prep <- prepare_heatmap_data(
+  AllStrainCultivationResults, multimoleculeFSEOF, fc_columns, "greater", control_label
+)
+fc_plot <- plot_sig_heatmap(
+  agg = fc_prep$agg,
+  fill_name  = "mean(FC)",
+  anchor_vals = c(0, 1, max(fc_prep$agg$mean_val, na.rm = TRUE)),
+  anchor_cols = c("#ffffff", "#ffffe5", "#005a32"),
+  x_levels = fc_prep$x_levels,
+  axis_label_colors = fc_prep$axis_label_colors
+)
+
+od_prep <- prepare_heatmap_data(
+  AllStrainCultivationResults, multimoleculeFSEOF, od_columns, "two.sided", control_label
+)
+
+ctrl_od_vals <- AllStrainCultivationResults %>%
+  dplyr::mutate(Modification = dplyr::case_when(
+    Modification %in% c("Upregulation","Mixed, Upregulation") ~ "Upregulation",
+    Modification %in% c("Knockout","Mixed, Knockout") ~ "Knockout",
+    TRUE ~ Modification
+  )) %>%
+  dplyr::filter(Modification == control_label) %>%
+  dplyr::select(dplyr::all_of(od_columns)) %>%
+  as.matrix() %>% as.numeric() %>% stats::na.omit()
+
+ctrl_od_mean <- if (length(ctrl_od_vals)) mean(ctrl_od_vals) else 0
+
+od_plot <- plot_sig_heatmap(
+  agg = od_prep$agg,
+  fill_name  = "mean(OD 48h)",
+  anchor_vals = c(min(od_prep$agg$mean_val, na.rm = TRUE), ctrl_od_mean, max(od_prep$agg$mean_val, na.rm = TRUE)),
+  anchor_cols = c("#ffffff", "#a6bddb", "#2b8cbe"),
+  x_levels = od_prep$x_levels,
+  axis_label_colors = od_prep$axis_label_colors
+)
+
+# ---------------------------
+# Build barplot for same genes in same order
+# ---------------------------
+# Extract gene list from heatmap (exclude Control)
+heatmap_genes <- setdiff(fc_prep$x_levels, control_label)
+
+# Prepare barplot data
+pred_cols <- c("HSA_predicted_change", "RBDJ_predicted_change", 
+               "nb3B2_predicted_change", "Trastuzumab_predicted_change")
+
+df_bar <- multimoleculeFSEOF %>%
+  mutate(is_knockout = str_detect(tolower(coalesce(category, "")), "knockout")) %>%
+  mutate(across(all_of(pred_cols), ~ ifelse(is_knockout, -., .), .names = "{.col}_adj"))
+
+adj_cols <- paste0(pred_cols, "_adj")
+
+# Filter to genes in heatmap and compute average
+barplot_data <- df_bar %>%
+  filter(FinalAnnotation %in% heatmap_genes) %>%
+  mutate(
+    GeneLabel = FinalAnnotation,
+    avg_flipped = rowMeans(select(., all_of(adj_cols)), na.rm = TRUE)
+  ) %>%
+  mutate(GeneLabel = factor(GeneLabel, levels = heatmap_genes))
+
+# Long data for points
+long_dat <- barplot_data %>%
+  select(GeneLabel, all_of(adj_cols)) %>%
+  pivot_longer(
+    cols = all_of(adj_cols),
+    names_to = "protein_adj",
+    values_to = "predicted_change"
+  ) %>%
+  mutate(
+    protein = str_remove(protein_adj, "_predicted_change_adj$"),
+    protein = factor(protein, levels = protein_levels)
+  )
+
+# Create barplot
+set.seed(123)
+barplot <- ggplot(barplot_data, aes(x = GeneLabel, y = avg_flipped)) +
+  geom_hline(yintercept = 0, linetype = "dashed", linewidth = 0.3, color = "grey50") +
+  geom_col(fill = "grey85", width = 0.8) +
+  geom_point(
+    data = long_dat,
+    aes(y = predicted_change, color = protein),
+    position = position_jitter(width = 0.18, height = 0),
+    size = 1.9, alpha = 0.9
+  ) +
+  labs(
+    x = NULL,
+    y = "Predicted change",
+    color = "Recombinant protein"
+  ) +
+  theme_bw(base_size = 12) +
+  theme(
+    panel.grid.major.y = element_blank(),
+    axis.text.y = element_text(size = 9),
+    axis.text.x = element_text(angle = 90, hjust = 1, vjust = 1, size = 10),
+    legend.position = 'bottom',
+    legend.title = element_text(size = 10),
+    legend.text = element_text(size = 9)
+  ) +
+  scale_color_manual(values = protein_colors, breaks = protein_levels)
+
+# ---------------------------
+# Combine all plots
+# ---------------------------
+fc_plot_stripped <- fc_plot +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
+
+od_plot_stripped <- od_plot +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
+
+final_combo <- (fc_plot_stripped / od_plot_stripped / barplot) + 
+  patchwork::plot_layout(heights = c(1, 1, 1.5))
+  
+
+final_combo
+
+# Save
+ggplot2::ggsave("Fig3d.svg", barplot, width = 5, height = 3, units = "in")
+```
+
+
+#5. Fig 4 
+##5.1 Fig 4a. 
+```{r}
+suppressPackageStartupMessages({
+  library(dplyr); library(stringr); library(ggplot2)
+  library(ggrepel); library(ggside); library(patchwork); library(tidyr)
+})
+
+# ─────────────────────────────────────────────────────────────────
+# PREREQUISITE: Build upregTFs and koTFs from TF results file
+# ─────────────────────────────────────────────────────────────────
+library(readxl)
+
+TF_targets <- read_excel("figure_data/03 Transcription Factors/TranscriptionFactorResults.xlsx")
+TF_targets <- TF_targets[TF_targets$'TF Present in K. phaffii?' == "TRUE", ]
+
+upregTFs <- TF_targets[
+  (TF_targets$Category == "Upregulation" | TF_targets$Category == "Mixed, Upregulation"), ]
+upregTFs <- drop_na(upregTFs[upregTFs$Interaction == "Activator", ])
+
+koTFs <- TF_targets[
+  (TF_targets$Category == "Knockout" | TF_targets$Category == "Mixed, Knockout"), ]
+koTFs <- drop_na(koTFs[koTFs$Interaction == "Inhibitor", ])
+
+# ─────────────────────────────────────────────────────────────────
+# 0.  SHARED CONSTANTS
+# ─────────────────────────────────────────────────────────────────
+pred_cols <- c("HSA_predicted_change", "RBDJ_predicted_change",
+               "nb3B2_predicted_change", "Trastuzumab_predicted_change")
+
+interaction_palette <- c(Activator = "#1b9e77",
+                         Inhibitor = "#d95f02",
+                         Mixed     = "#7570b3")
+
+shared_theme <- theme_bw(base_size = 12) +
+  theme(
+    ggside.panel.scale.x    = 0.05,
+    ggside.panel.scale.y    = 0.05,
+    ggside.panel.background = element_blank(),
+    ggside.panel.border     = element_blank(),
+    ggside.axis.ticks       = element_blank(),
+    ggside.axis.text        = element_blank(),
+    ggside.panel.grid.major = element_blank(),   # remove major grid from histograms
+    ggside.panel.grid.minor = element_blank()    # remove minor grid from histograms
+  )
+
+# ─────────────────────────────────────────────────────────────────
+# 1.  GENE-LEVEL LOOKUP  (shared by both plots)
+# ─────────────────────────────────────────────────────────────────
+gene_lookup <- multimoleculeFSEOF %>%
+  mutate(
+    GQ_names        = str_trim(as.character(GQ_names)),
+    FinalAnnotation = str_trim(as.character(FinalAnnotation)),
+    is_knockout     = str_detect(tolower(coalesce(category, "")), "knockout")
+  ) %>%
+  mutate(across(all_of(pred_cols), as.numeric)) %>%
+  mutate(across(all_of(pred_cols),
+                ~ ifelse(is_knockout, -., .),
+                .names = "{.col}_adj")) %>%
+  mutate(across(ends_with("_adj"),
+                ~ dplyr::percent_rank(.) * 100,
+                .names = "{.col}_adj_pct")) %>%
+  transmute(
+    GQ_names,
+    FinalAnnotation,
+    avg_percentile = rowMeans(across(ends_with("_adj_pct")), na.rm = TRUE)
+  )
+
+lk_GQ <- gene_lookup %>% select(GQ_names, FinalAnnotation, avg_percentile)
+lk_FA  <- gene_lookup %>%
+  select(FinalAnnotation, avg_percentile) %>%
+  rename(avg_percentile_byFA = avg_percentile)
+
+# ─────────────────────────────────────────────────────────────────
+# 2.  TF EDGE TABLE  (shared by both plots)
+# ─────────────────────────────────────────────────────────────────
+tf_edges_joined <- bind_rows(upregTFs, koTFs) %>%
+  mutate(
+    Gene        = str_trim(as.character(Gene)),
+    Interaction = str_trim(as.character(Interaction))
+  ) %>%
+  select(`Transcription Factor`, Gene, Interaction, Rank_Pred_change) %>%
+  mutate(Rank_Pred_change = suppressWarnings(as.numeric(Rank_Pred_change))) %>%
+  filter(!is.na(`Transcription Factor`), !is.na(Gene)) %>%
+  distinct(`Transcription Factor`, Gene, Interaction, .keep_all = TRUE) %>%
+  left_join(lk_GQ, by = c("Gene" = "GQ_names")) %>%
+  rename(FA_byGQ = FinalAnnotation) %>%
+  left_join(lk_FA, by = c("Gene" = "FinalAnnotation")) %>%
+  mutate(
+    avg_percentile  = coalesce(avg_percentile, avg_percentile_byFA),
+    FinalAnnotation = coalesce(FA_byGQ, Gene)
+  ) %>%
+  select(-FA_byGQ, -avg_percentile_byFA)
+
+# ─────────────────────────────────────────────────────────────────
+# 3.  HELPERS
+# ─────────────────────────────────────────────────────────────────
+collapse_interaction <- function(x) {
+  u <- unique(na.omit(x))
+  if (length(u) == 1) str_to_title(u) else "Mixed"
+}
+
+add_plot_cols <- function(df, label_col, match_vec) {
+  df %>%
+    mutate(
+      label       = ifelse(.data[[label_col]] %in% match_vec, .data[[label_col]], ""),
+      has_label   = label != "",
+      color_var   = ifelse(has_label, "black", as.character(Interaction)),
+      Interaction = factor(Interaction, levels = names(interaction_palette))
+    ) %>%
+    # ③ sort so labelled points are drawn last → rendered on top
+    arrange(has_label)
+}
+
+# ─────────────────────────────────────────────────────────────────
+# 4.  PLOT-SPECIFIC SUMMARIES
+# ─────────────────────────────────────────────────────────────────
+tested_tf_lookup <- AllStrainCultivationResults %>%
+  mutate(FA_upper = toupper(as.character(FinalAnnotation))) %>%
+  pull(FA_upper) %>% unique()
+
+tf_summary1 <- tf_edges_joined %>%
+  group_by(`Transcription Factor`) %>%
+  summarise(
+    genes_influenced      = n_distinct(FinalAnnotation[!is.na(avg_percentile)]),
+    median_avg_percentile = median(avg_percentile[!is.na(avg_percentile)], na.rm = TRUE),
+    max_avg_percentile    = max(avg_percentile[!is.na(avg_percentile)],    na.rm = TRUE),
+    Interaction           = collapse_interaction(Interaction),
+    .groups               = "drop"
+  ) %>%
+  filter(!is.na(median_avg_percentile), is.finite(median_avg_percentile),
+         genes_influenced > 0) %>%
+  mutate(TF_trim_upper = toupper(str_sub(`Transcription Factor`, 1, -2))) %>%
+  add_plot_cols("TF_trim_upper", tested_tf_lookup)
+
+annotate_tfs <- AllStrainCultivationResults %>%
+  filter(Modification == "TF Upregulation") %>%
+  pull(FinalAnnotation) %>% unique() %>% toupper()
+
+fc_lookup <- AllStrainCultivationResults %>%
+  filter(Round < 5) %>%
+  mutate(across(c(FC_1, FC_2, FC_3), ~ suppressWarnings(as.numeric(.)))) %>%
+  mutate(Avg_FC = rowMeans(across(c(FC_1, FC_2, FC_3)), na.rm = TRUE)) %>%
+  group_by(FinalAnnotation, Modification) %>%
+  summarise(Median_Avg_FC = mean(Avg_FC, na.rm = TRUE), .groups = "drop") %>%
+  filter(!is.na(Median_Avg_FC)) %>%
+  mutate(Interaction = case_when(
+    Modification == "Upregulation" ~ "Activator",
+    Modification == "Knockout"     ~ "Inhibitor",
+    TRUE                           ~ NA_character_
+  )) %>%
+  filter(!is.na(Interaction)) %>%
+  transmute(Gene = FinalAnnotation, Interaction, Median_Avg_FC)
+
+tf_summary2 <- tf_edges_joined %>%
+  left_join(fc_lookup, by = c("Gene", "Interaction")) %>%
+  filter(!is.na(Median_Avg_FC)) %>%
+  group_by(`Transcription Factor`) %>%
+  summarise(
+    NumTargets        = n(),
+    Avg_Median_Avg_FC = median(Median_Avg_FC, na.rm = TRUE),
+    Interaction       = collapse_interaction(Interaction),
+    .groups           = "drop"
+  ) %>%
+  mutate(TF_clean = toupper(str_sub(`Transcription Factor`, 1, -2))) %>%
+  add_plot_cols("TF_clean", annotate_tfs)
+
+# ─────────────────────────────────────────────────────────────────
+# 5.  SHARED SCALE / LAYER DEFINITIONS
+# ─────────────────────────────────────────────────────────────────
+present_levels <- intersect(
+  names(interaction_palette),
+  union(levels(tf_summary1$Interaction), levels(tf_summary2$Interaction))
+)
+fill_vals <- interaction_palette[present_levels]
+
+# ② geom_point is NOT in shared_layers → size can be added per-plot without
+#    leaking into the histogram geoms and without triggering the warning.
+#    ③ Two point layers per plot: unlabelled first, labelled on top.
+point_layers <- function(size_var = NULL, fixed_size = 2) {
+  make_aes <- function() {
+    if (!is.null(size_var))
+      aes(color = color_var, fill = Interaction, shape = has_label,
+          size = .data[[size_var]])
+    else
+      aes(color = color_var, fill = Interaction, shape = has_label)
+  }
+  # 3. size only passed to geom_point when using size_var; otherwise use fixed_size
+  list(
+    geom_point(data = ~ filter(., !has_label), mapping = make_aes(),
+               stroke = 1, alpha = 0.85,
+               size = if (is.null(size_var)) fixed_size else NULL),
+    geom_point(data = ~ filter(., has_label),  mapping = make_aes(),
+               stroke = 1, alpha = 0.85,
+               size = if (is.null(size_var)) fixed_size else NULL)
+  )
+}
+
+shared_layers <- list(
+  geom_text_repel(
+    aes(label = label),
+    size = 3, color = "black",
+    max.overlaps  = Inf,
+    point.padding = 0.5, box.padding = 0.5,
+    segment.size  = 0.4, segment.colour = "black",
+    arrow = grid::arrow(type = "closed", length = unit(0.025, "npc"))
+  ),
+  scale_color_manual(values = c(fill_vals, "black" = "black"), guide = "none"),
+  scale_fill_manual(values = fill_vals, breaks = present_levels, name = "Interaction"),
+  scale_shape_manual(values = c("FALSE" = 16, "TRUE" = 21), guide = "none"),
+  guides(fill = guide_legend(override.aes = list(shape = 21, color = "black", stroke = 1))),
+  geom_xsidehistogram(bins = 20, fill = "grey60", color = NA, linewidth = 0),
+  geom_ysidehistogram(bins = 20, fill = "grey60", color = NA, linewidth = 0),
+  shared_theme
+)
+
+# ─────────────────────────────────────────────────────────────────
+# 6.  BUILD PLOTS
+# ─────────────────────────────────────────────────────────────────
+p1 <- ggplot(tf_summary1, aes(x = max_avg_percentile, y = genes_influenced)) +
+  point_layers("median_avg_percentile") +
+  shared_layers +
+  scale_fill_manual(values = fill_vals, breaks = present_levels, guide = "none") +  # suppress fill legend in p1
+  scale_size_continuous(name = "Median Avg\nTarget Percentile", range = c(0.1, 8)) +
+  labs(x = "Maximum Average Target Percentile",
+       y = "Number of FSEOF Gene Targets")
+# 2. Increase point size in p2 by adding a fixed size in point_layers()
+p2 <- ggplot(tf_summary2, aes(x = Avg_Median_Avg_FC, y = NumTargets)) +
+  point_layers(fixed_size = 4) +   # <-- pass a fixed size
+  shared_layers +
+  scale_y_continuous(breaks = scales::breaks_width(1)) +   # 4. integer y axis
+  labs(x = "Avg Median FC Across Matched Targets",
+       y = "Number of Matched Targets")
+
+# ─────────────────────────────────────────────────────────────────
+# 7.  COMBINE & SAVE
+# ─────────────────────────────────────────────────────────────────
+Fig4 <- (p1 | p2) +
+  plot_layout(guides = "collect") &
+  theme(legend.position = "bottom")
+
+Fig4
+ggsave("Fig4.svg", Fig4, width = 7, height = 4)
+```
+
+
+
+##5.2 Fig 4b. 
+```{r}
+# TF-only prep: filter {TF Upregulation, Control}, build labels "TF: <FinalAnnotation>",
+# compute per-cell means and BH/FDR stars, build x-order and tick colors.
+prepare_tf_heatmap_data <- function(cultivation_data,
+                                    value_columns,
+                                    control_label = "Control",
+                                    feature_data = NULL   # optional: to order by avg_predicted_change
+) {
+  ggtext_available <- requireNamespace("ggtext", quietly = TRUE)
+
+  # 1) Filter the subset
+  df0 <- cultivation_data %>%
+    dplyr::filter(Modification %in% c("TF Upregulation", control_label))
+
+  # 2) Labels (Control, TF: <FinalAnnotation>)
+  df_lab <- df0 %>%
+    dplyr::mutate(
+      mod_key = dplyr::case_when(
+        Modification == "TF Upregulation" ~ "TF_UPREG",
+        Modification == control_label      ~ "CONTROL",
+        TRUE ~ toupper(Modification)
+      ),
+      FinalAnnotation_label = dplyr::case_when(
+        mod_key == "CONTROL"   ~ control_label,
+        mod_key == "TF_UPREG"  ~ paste0("TF: ", FinalAnnotation),
+        TRUE ~ FinalAnnotation
+      )
+    )
+
+  # 3) Long with replicates
+  stopifnot(all(value_columns %in% names(df_lab)))
+  long <- df_lab %>%
+    dplyr::select(RecombinantProtein, FinalAnnotation_label, mod_key, dplyr::all_of(value_columns)) %>%
+    tidyr::pivot_longer(cols = dplyr::all_of(value_columns), names_to = "rep", values_to = "value") %>%
+    dplyr::filter(!is.na(value))
+
+  # 4) Means per (RP, label)
+  means <- long %>%
+    dplyr::group_by(RecombinantProtein, FinalAnnotation_label) %>%
+    dplyr::summarise(mean_val = mean(value, na.rm = TRUE), .groups = "drop")
+
+  # 5) Stats vs Control (reuse your existing helper)
+  # NOTE: For FC, you'll call this prep and then plot with test_side="greater";
+  # for OD, call prep and plot with test_side="two.sided".
+  compute_stats <- function(test_side) {
+    compute_stats_vs_control(
+      df_long       = long,
+      control_label = control_label,
+      test_side     = test_side
+    )
+  }
+
+  # Return a function to join stats later (lets us reuse a single prep for FC & OD)
+  join_stats <- function(test_side) {
+    means %>%
+      dplyr::left_join(compute_stats(test_side), by = c("RecombinantProtein", "FinalAnnotation_label")) %>%
+      dplyr::mutate(sig = dplyr::coalesce(sig, ""), n_stars = nchar(sig))
+  }
+
+  # 6) X-order: Control first, then (optionally) by avg_predicted_change if provided
+  if (!is.null(feature_data) && all(c("GQ_names", "category", "FinalAnnotation", "avg_predicted_change") %in% names(feature_data))) {
+    # Map feature_data to TF Upreg + Control domain
+    feat_tf <- feature_data %>%
+      dplyr::filter(category == "TF Upregulation") %>%
+      dplyr::distinct(FinalAnnotation, avg_predicted_change)
+
+    x_order_tbl <- df_lab %>%
+      dplyr::distinct(FinalAnnotation_label, mod_key, FinalAnnotation) %>%
+      dplyr::left_join(feat_tf, by = "FinalAnnotation") %>%
+      dplyr::mutate(avg_predicted_change = dplyr::if_else(mod_key == "CONTROL", NA_real_, avg_predicted_change))
+
+    non_ctrl_x <- x_order_tbl %>%
+      dplyr::filter(mod_key != "CONTROL") %>%
+      dplyr::arrange(avg_predicted_change) %>%
+      dplyr::pull(FinalAnnotation_label)
+  } else {
+    # Fallback: alphabetical (or keep current order) for TF labels
+    non_ctrl_x <- df_lab %>%
+      dplyr::filter(mod_key != "CONTROL") %>%
+      dplyr::pull(FinalAnnotation_label) %>% unique() %>% sort()
+  }
+  x_levels <- c(control_label, setdiff(non_ctrl_x, control_label))
+
+  # 7) RP order
+  rp_order <- c("Trastuzumab", "HSA", "RBDJ", "nb3B2")
+
+  # 8) x-tick colors: Control black, TF upreg brown
+  # (These feed to plot_sig_heatmap as axis_label_colors)
+  label_mod_map <- df_lab %>% dplyr::distinct(FinalAnnotation_label, mod_key)
+  axis_label_colors <- setNames(
+    dplyr::case_when(
+      label_mod_map$mod_key == "TF_UPREG" ~ "#8c510a",  # brown
+      TRUE                                 ~ "#000000"  # control or anything else
+    ),
+    label_mod_map$FinalAnnotation_label
+  )
+
+  list(
+    long      = long,
+    means     = means,    # not strictly needed outside
+    join_stats = join_stats,
+    x_levels  = x_levels,
+    rp_order  = rp_order,
+    axis_label_colors = axis_label_colors
+  )
+}
+
+# Columns
+fc_columns <- c("FC_1", "FC_2", "FC_3")
+od_columns <- c("OD_48hr_1", "OD_48hr_2", "OD_48hr_3")
+control_label <- "Control"
+
+# --- Prep once for FC subset (TF Upreg + Control)
+tf_fc_prep <- prepare_tf_heatmap_data(
+  cultivation_data = AllStrainCultivationResults,
+  value_columns    = fc_columns,
+  control_label    = control_label,
+  feature_data     = multimoleculeFSEOF   # pass if you want x-order by avg_predicted_change; else set NULL
+)
+
+# Aggregate with stats (FC: one-tailed, greater)
+tf_fc_agg <- tf_fc_prep$join_stats(test_side = "greater") %>%
+  dplyr::mutate(
+    FinalAnnotation_label = factor(FinalAnnotation_label, levels = tf_fc_prep$x_levels),
+    RecombinantProtein    = factor(RecombinantProtein, levels = tf_fc_prep$rp_order)
+  )
+
+# FC color anchors: 0 -> white, 1 -> "#ffffe5", max -> "#005a32"
+fc_anchor_vals <- c(0, 1, max(tf_fc_agg$mean_val, na.rm = TRUE))
+fc_anchor_cols <- c("#ffffff", "#ffffe5", "#005a32")
+
+tf_fc_plot <- plot_sig_heatmap(
+  agg        = tf_fc_agg,
+  fill_name  = "mean(FC)",
+  anchor_vals = fc_anchor_vals,
+  anchor_cols = fc_anchor_cols,
+  x_levels  = tf_fc_prep$x_levels,
+  axis_label_colors = tf_fc_prep$axis_label_colors
+)
+
+# --- Prep once for OD subset (TF Upreg + Control)
+tf_od_prep <- prepare_tf_heatmap_data(
+  cultivation_data = AllStrainCultivationResults,
+  value_columns    = od_columns,
+  control_label    = control_label,
+  feature_data     = multimoleculeFSEOF
+)
+
+# Aggregate with stats (OD: two-tailed)
+tf_od_agg <- tf_od_prep$join_stats(test_side = "two.sided") %>%
+  dplyr::mutate(
+    FinalAnnotation_label = factor(FinalAnnotation_label, levels = tf_od_prep$x_levels),
+    RecombinantProtein    = factor(RecombinantProtein, levels = tf_od_prep$rp_order)
+  )
+
+# OD anchors: 0 -> white, mean(Control) -> darker mid blue, max -> darkest blue
+ctrl_od_vals <- AllStrainCultivationResults %>%
+  dplyr::filter(Modification == control_label) %>%
+  dplyr::select(dplyr::all_of(od_columns)) %>%
+  as.matrix() %>% as.numeric() %>% stats::na.omit()
+ctrl_od_mean <- if (length(ctrl_od_vals)) mean(ctrl_od_vals) else 0
+
+od_anchor_vals <- c(min(tf_od_agg$mean_val, na.rm = TRUE), ctrl_od_mean, max(tf_od_agg$mean_val, na.rm = TRUE))
+od_anchor_cols <- c("#ffffff", "#a6bddb", "#2b8cbe")  # darker mid & max blues
+
+tf_od_plot <- plot_sig_heatmap(
+  agg        = tf_od_agg,
+  fill_name  = "mean(OD 48h)",
+  anchor_vals = od_anchor_vals,
+  anchor_cols = od_anchor_cols,
+  x_levels  = tf_od_prep$x_levels,
+  axis_label_colors = tf_od_prep$axis_label_colors
+)
+
+# Stack (FC top, strip its x-axis)
+tf_fc_plot_stripped <- tf_fc_plot +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
+
+tf_combined_plot <- (tf_fc_plot_stripped / tf_od_plot) + patchwork::plot_layout(heights = c(1, 1))
+# View or save:
+tf_combined_plot
+ggplot2::ggsave("Fig4b.svg", tf_combined_plot, width = 8, height = 3, units = "in")
+
+
+```
+
+#6. Fig 5. 
+## 6.1 Fig 5a.
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(purrr)
+library(patchwork)
+library(readr)
+
+costppTable <- read.csv("figure_data/04 High Cost KO/ppPSIMv3_modified_withCost.csv")
+
+gene_col  <- "Gene"
+cost_cols <- c("SulfCost", "PhosphCost", "NitrCost", "CarbCost")
+
+# ---------- Gene sets ----------
+# High-cost KO targets (Round 3 in cultivation results)
+r3_genes <- AllStrainCultivationResults %>%
+  filter(Round == 3) %>%
+  pull(Gene) %>%
+  base::unique()
+
+prevKO_genes <- AllStrainCultivationResults %>%
+  filter(Modification == "Knockout") %>%
+  pull(Gene) %>%
+  base::unique()
+
+# Top-50 highest-cost union across cost columns
+top50_union <- cost_cols %>%
+  map(function(cc) {
+    if (!cc %in% names(costppTable)) return(character(0))
+    idx <- order(costppTable[[cc]], decreasing = TRUE, na.last = NA)
+    idx <- idx[seq_len(min(50, length(idx)))]
+    costppTable[[gene_col]][idx]
+  }) %>%
+  unlist(use.names = FALSE) %>%
+  base::unique()
+
+# Priority assignment: High-cost KO > Top-50 > Previously KO > Background
+assign_plot_group <- function(df, gene_col = "Gene") {
+  df %>%
+    mutate(
+      is_highcostKO = .data[[gene_col]] %in% r3_genes,
+      is_top50      = .data[[gene_col]] %in% top50_union,
+      is_prevKO     = .data[[gene_col]] %in% prevKO_genes,
+      plot_group = dplyr::case_when(
+        is_highcostKO ~ "highcostKO",
+        is_top50      ~ "top50",
+        is_prevKO     ~ "prevKO",
+        TRUE          ~ "background"
+      )
+    )
+}
+
+# ---------- Aesthetics ----------
+# Okabe–Ito inspired, manuscript-friendly and colorblind-safe
+group_colors <- c(
+  background = "#BFBFBF",  # neutral gray
+  prevKO     = "#0072B2",  # blue
+  top50      = "#E69F00",  # orange
+  highcostKO = "#C45A00"   # darker orange (subset of top50)
+)
+
+group_alphas <- c(
+  background = 0.25,
+  prevKO     = 0.75,
+  top50      = 0.75,
+  highcostKO = 0.95
+)
+
+# Updated sizes per your spec
+group_sizes <- c(
+  background = 0.3,   # faint backdrop
+  prevKO     = 0.8,
+  top50      = 0.9,
+  highcostKO = 1.2    # most prominent
+)
+
+# ---------- Fig 5a: violins with only prevKO + highcostKO points ----------
+plot_cost_violins_tri_highlight <- function(cost_df,
+                                            cost_cols = c("SulfCost","PhosphCost","NitrCost","CarbCost"),
+                                            y_lab = "Cost",
+                                            violin_alpha = 1,
+                                            cost_fill_map = c(SulfCost="#fde0dd",
+                                                              PhosphCost="#e0ecf4",
+                                                              NitrCost="#e5f5e0",
+                                                              CarbCost="#fff7bc")) {
+
+  long <- cost_df %>%
+    select(any_of(c("Gene", cost_cols))) %>%
+    pivot_longer(all_of(cost_cols), names_to = "cost_type", values_to = "cost_value") %>%
+    mutate(cost_type = factor(cost_type, levels = cost_cols)) %>%
+    assign_plot_group(gene_col = "Gene")
+
+  plots <- long %>%
+    group_split(cost_type, .keep = TRUE) %>%
+    setNames(levels(long$cost_type)) %>%
+    purrr::map(function(dat) {
+      ct <- as.character(unique(dat$cost_type))
+      panel_fill <- cost_fill_map[[ct]]; if (is.null(panel_fill)) panel_fill <- "grey80"
+      yl <- if (ct == cost_cols[1]) y_lab else NULL
+
+      # Only keep prevKO and highcostKO for the overlay points
+      dat_pts <- dat %>% filter(plot_group %in% c("prevKO", "highcostKO"))
+
+      ggplot(dat, aes(x = ct, y = cost_value)) +
+        geom_violin(fill = panel_fill, color = "grey30",
+                    alpha = violin_alpha, trim = FALSE, width = 1.5,
+                    show.legend = FALSE) +
+        geom_jitter(
+          data = dat_pts,
+          aes(color = plot_group, alpha = plot_group, size = plot_group),
+          width = 0.65, height = 0, show.legend = FALSE
+        ) +
+        stat_summary(fun = median, geom = "crossbar", width = 0.45,
+                     fatten = 0, color = "grey10", alpha = 0.6) +
+        labs(x = ct, y = yl) +
+        scale_color_manual(values = group_colors, drop = FALSE) +
+        scale_alpha_manual(values = group_alphas, drop = FALSE) +
+        scale_size_manual(values  = group_sizes,  drop = FALSE) +
+        theme_bw() +
+        theme(
+          panel.grid   = element_blank(),
+          axis.text.x  = element_blank(),
+          axis.ticks.x = element_blank(),
+          plot.title   = element_blank(),
+          plot.margin  = margin(4, 4, 4, 4)
+        )
+    })
+
+  patchwork::wrap_plots(plots, nrow = 1, guides = "collect") +
+    patchwork::plot_layout(widths = rep(1, length(plots)))
+}
+
+# Usage
+combined_tri <- plot_cost_violins_tri_highlight(cost_df = costppTable,
+                                                cost_cols = cost_cols,
+                                                violin_alpha = 1)
+combined_tri
+ggsave("Fig5a.svg", combined_tri, width = 4, height = 3, dpi = 300)
+
+# ---------- Fig 5b: scatter with all groups (background + top50 + prevKO + highcostKO) ----------
+group_sizes <- group_sizes*2
+plot_df <- costppTable %>%
+  mutate(
+    .p_safe    = pmax(pval, .Machine$double.xmin),
+    x_neglog10 = -log10(.p_safe),
+    y_mean     = rowMeans(cbind(`Her2_1.MeOH_avg`, `nb3B2_1.MeOH_avg`), na.rm = TRUE)
+  ) %>%
+  assign_plot_group(gene_col = gene_col)
+
+y_median <- median(plot_df$y_mean, na.rm = TRUE)
+
+p_scatter <- ggplot(plot_df, aes(x = x_neglog10, y = Her2_1.MeOH_avg)) +
+  geom_hline(yintercept = y_median, linetype = "dashed", linewidth = 0.4) +
+  geom_vline(xintercept = 0.2, linetype = "dashed", linewidth = 0.4) +
+  geom_point(
+    aes(color = plot_group, alpha = plot_group, size = plot_group),
+    stroke = 0, show.legend = FALSE
+  ) +
+  scale_color_manual(values = group_colors, drop = FALSE) +
+  scale_alpha_manual(values = group_alphas, drop = FALSE) +
+  scale_size_manual(values  = group_sizes,  drop = FALSE) +
+  labs(
+    x = "Essentiality",   # change to "-log10(p-value)" if preferred
+    y = "Expression (L2TPM)",
+    title = NULL
+  ) +
+  theme_bw() +
+  theme(
+    panel.grid.minor = element_blank(),
+    panel.grid.major = element_line(linewidth = 0.2),
+    axis.title = element_text(size = 12),
+    axis.text  = element_text(size = 10)
+  )
+
+p_scatter
+ggsave("Fig5b.svg", p_scatter, width = 3.5, height = 3)
+
+```
+## 6.4 Fig 5d.
+```{r}
+suppressPackageStartupMessages({
+  library(dplyr); library(tidyr); library(ggplot2); library(patchwork)
+})
+library(conflicted)
+conflicts_prefer(
+  dplyr::filter, dplyr::select, dplyr::mutate, dplyr::summarize, dplyr::summarise,
+  dplyr::arrange, dplyr::rename, dplyr::count, dplyr::group_by, dplyr::ungroup,
+  dplyr::pull, dplyr::distinct, dplyr::case_when, dplyr::if_else, dplyr::left_join,
+  base::unique, base::setdiff, base::union, base::intersect,
+  base::sort, base::table, base::rank,
+  .quiet = TRUE
+)
+# Colors (same scheme as earlier)
+mod_colors <- c("UPREGULATION"="#5ab4ac", "KNOCKOUT"="#d8b365", "CONTROL"="#bdbdbd", "TF_UPREG"="#8c510a")
+axis_text_size <- 10; axis_title_size <- 12
+pt10_mm <- 10/2.845; star_size_mm <- pt10_mm
+
+# --- Helper: detect replicate columns by base or accept explicit vector
+repcols_for_base <- function(df, base_or_cols) {
+  if (length(base_or_cols) == 1 && !base_or_cols %in% names(df)) {
+    grep(paste0("^", base_or_cols, "_\\d+$"), names(df), value = TRUE)
+  } else base_or_cols
+}
+
+# --- Helper: stats vs Control (reuse your centered-stars version assumptions)
+compute_stats_vs_control <- function(df_long, control_label, test_side = c("greater","two.sided")) {
+  side <- match.arg(test_side)
+  if (nrow(df_long) == 0) return(tibble::tibble(RecombinantProtein=character(), X=character(), sig=character()))
+  df_long %>%
+    dplyr::group_by(RecombinantProtein) %>%
+    dplyr::group_modify(function(d, key) {
+      ctrl_vals <- d %>% dplyr::filter(X == control_label) %>% dplyr::pull(value) %>% stats::na.omit()
+      tbl <- d %>%
+        dplyr::group_by(X) %>%
+        dplyr::summarize(vals = list(stats::na.omit(value)), .groups = "drop") %>%
+        dplyr::mutate(pval = purrr::map2_dbl(vals, X, ~{
+          if (.y == control_label || length(ctrl_vals) < 2 || length(.x) < 2) return(NA_real_)
+          tryCatch(stats::t.test(.x, ctrl_vals, var.equal=FALSE, alternative=side)$p.value, error=function(e) NA_real_)
+        }))
+      non_ctrl <- !is.na(tbl$pval) & tbl$X != control_label
+      tbl$FDR <- NA_real_; if (any(non_ctrl)) tbl$FDR[non_ctrl] <- p.adjust(tbl$pval[non_ctrl], method="BH")
+      tbl %>% dplyr::mutate(sig = dplyr::case_when(is.na(FDR)~"", FDR<0.001~"***", FDR<0.01~"**", FDR<0.05~"*", TRUE~"")) %>%
+        dplyr::select(X, sig)
+    }) %>% dplyr::ungroup()
+}
+
+# Find replicate columns by trying a list of base prefixes (case/underscore tolerant).
+# Returns a character vector like c("<base>_1","<base>_2",...) or stops with a clear error.
+
+find_rep_cols <- function(df, base_candidates, must_exist = TRUE) {
+  nms <- names(df)
+
+  # Canonicalize: lower-case; non-alnum -> "_"
+  canon <- function(s) gsub("[^A-Za-z0-9]+", "_", tolower(s))
+  nms_c <- canon(nms)
+
+  # Try each candidate (also canonicalized)
+  for (base in base_candidates) {
+    base_c <- canon(base)
+    # regex on canonical names: ^<base>_<digits>$
+    rx <- paste0("^", base_c, "_\\d+$")
+    hits_idx <- grep(rx, nms_c, ignore.case = FALSE)
+    if (length(hits_idx) > 0) {
+      # Return the ORIGINAL column names in numeric order
+      hits <- nms[hits_idx]
+      ord <- order(as.integer(sub(".*_(\\d+)$", "\\1", hits)))
+      return(hits[ord])
+    }
+  }
+
+  if (must_exist) {
+    stop(
+      "Could not find replicate columns with any of these bases: ",
+      paste(base_candidates, collapse = ", "),
+      "\nAvailable columns include:\n",
+      paste(utils::head(nms, 50), collapse = ", ")
+    )
+  } else {
+    character(0)
+  }
+}
+
+# --- Shared Round-3 prep (labels, x-order, tick colors)
+prepare_round3_common <- function(cultivation_data, control_label="Control", feature_data=NULL) {
+  make_label <- function(mod, gene, control_label="Control", delta_symbol="\u0394") {
+    up_arrow <- "↑"; Encoding(up_arrow) <- "UTF-8"
+    dplyr::case_when(
+      mod=="Control" ~ control_label,
+      mod=="Upregulation" ~ paste0(up_arrow," ",gene),
+      mod=="Knockout" ~ paste0(delta_symbol," ",gene),
+      mod=="TF Upregulation" ~ paste0("TF: ",gene),
+      TRUE ~ gene
+    )
+  }
+  df0 <- cultivation_data %>% filter(Round==3)
+  df_lab <- df0 %>%
+    mutate(
+      mod_key = case_when(
+        Modification=="Control" ~ "CONTROL",
+        Modification=="Upregulation" ~ "UPREGULATION",
+        Modification=="Knockout" ~ "KNOCKOUT",
+        Modification=="TF Upregulation" ~ "TF_UPREG",
+        TRUE ~ toupper(Modification)
+      ),
+      X = make_label(Modification, Gene, control_label)    # unified x-label name "X"
+    )
+
+  # x-order: Control first, then ascending avg_predicted_change if available, else alphabetical
+  if (!is.null(feature_data) && all(c("FinalAnnotation","avg_predicted_change") %in% names(feature_data))) {
+    ord_tbl <- df_lab %>% distinct(X, mod_key, Gene) %>%
+      left_join(feature_data %>% distinct(FinalAnnotation, avg_predicted_change),
+                by=c("Gene"="FinalAnnotation")) %>%
+      mutate(avg_predicted_change = if_else(mod_key=="CONTROL", NA_real_, avg_predicted_change))
+    non_ctrl <- ord_tbl %>% filter(mod_key!="CONTROL") %>% arrange(avg_predicted_change) %>% pull(X) %>% unique()
+  } else {
+    non_ctrl <- df_lab %>% filter(mod_key!="CONTROL") %>% pull(X) %>% unique() %>% sort()
+  }
+  x_levels <- c(control_label, setdiff(non_ctrl, control_label))
+
+  # tick colors by modification
+  label_mod_map <- df_lab %>% distinct(X, mod_key)
+  axis_label_colors <- setNames(
+    case_when(
+      label_mod_map$mod_key=="UPREGULATION" ~ mod_colors["UPREGULATION"],
+      label_mod_map$mod_key=="KNOCKOUT"     ~ mod_colors["KNOCKOUT"],
+      label_mod_map$mod_key=="TF_UPREG"     ~ mod_colors["TF_UPREG"],
+      TRUE ~ "#000000"
+    ),
+    label_mod_map$X
+  )
+
+  # RP list (present in Round 3)
+  rp_levels <- df_lab$RecombinantProtein %>% unique()
+
+  list(df_lab=df_lab, x_levels=x_levels, axis_label_colors=axis_label_colors, rp_levels=rp_levels)
+}
+
+# --- q_p per-RP barplot (Welch one-tailed greater vs Control, BH/FDR)
+plot_round3_qp_bar_for_rp <- function(df_lab, x_levels, rp_name, qp_columns, control_label = "Control", show_legend = TRUE) {
+  rep_cols <- repcols_for_base(df_lab, qp_columns)
+
+  # Long table for this RP only
+  long <- df_lab %>%
+    dplyr::filter(RecombinantProtein == rp_name) %>%
+    dplyr::select(RecombinantProtein, X, mod_key, dplyr::all_of(rep_cols)) %>%
+    tidyr::pivot_longer(dplyr::all_of(rep_cols), names_to = "rep", values_to = "value") %>%
+    dplyr::filter(!is.na(value))
+
+  if (nrow(long) == 0) stop("No q_p data for RP: ", rp_name)
+
+  # Stats (Welch one-tailed, greater) vs Control for this RP
+  stats <- compute_stats_vs_control(
+    long %>% dplyr::select(RecombinantProtein, X, value),
+    control_label = control_label,
+    test_side = "greater"
+  ) %>%
+    dplyr::filter(RecombinantProtein == rp_name) %>%   # <-- keep only this RP
+    dplyr::select(X, sig)
+
+  # Means + mod_key + sig (join by X only)
+  bar_df <- long %>%
+    dplyr::group_by(X) %>%
+    dplyr::summarise(mean_val = mean(value, na.rm = TRUE),
+                     ymax     = max(value,  na.rm = TRUE), .groups = "drop") %>%
+    dplyr::left_join(df_lab %>% dplyr::distinct(X, mod_key), by = "X") %>%
+    dplyr::left_join(stats, by = "X") %>%
+    dplyr::mutate(sig = dplyr::coalesce(sig, ""))
+
+  # Factors + star y
+  long$X   <- factor(long$X,   levels = x_levels)
+  bar_df$X <- factor(bar_df$X, levels = x_levels)
+
+  panel_top <- 1.2*max(long$value, na.rm = TRUE)
+  y_pad     <- 0.001 * panel_top
+  bar_df$star_y <- panel_top - 1 * y_pad  # near top, inside the panel
+
+  ggplot() +
+    geom_col(
+      data = bar_df,
+      aes(x = X, y = mean_val, fill = mod_key),
+      width = 0.7
+    ) +
+    geom_point(
+      data = long,
+      aes(x = X, y = value),
+      position = position_jitter(width = 0.15, height = 0),
+      size = 0.9, alpha = 0.8
+    ) +
+    geom_text(
+      data = bar_df %>% dplyr::filter(sig != ""),
+      aes(x = X, y = star_y, label = sig),
+      vjust = 1, size = 10/2.845
+    ) +
+    scale_fill_manual(
+      name = "Modification",
+      values = c("CONTROL" = "#bdbdbd", "UPREGULATION" = "#5ab4ac",
+                 "KNOCKOUT" = "#d8b365", "TF_UPREG" = "#8c510a")
+    ) +
+    labs(x = NULL, y = "q_p (mg/L/OD/hr)", title = rp_name) +
+    theme_bw() +
+    theme(
+      axis.text.x  = element_text(angle = 45, hjust = 1, vjust = 1, size = 10),
+      axis.text.y  = element_text(size = 10),
+      axis.title.y = element_text(size = 12),
+      legend.position = if (show_legend) "right" else "none",
+      plot.title   = element_text(size = 12, face = "bold")
+    ) +
+    scale_x_discrete(drop = FALSE, limits = x_levels) +
+    scale_y_continuous(limits = c(0, NA)) +
+    guides(fill = guide_legend(override.aes = list(color = NA))) +
+    coord_cartesian(clip = "on")
+}
+
+
+# --- OD Round-3 heatmap (two-tailed), removing RP rows with no data
+prepare_round3_common <- function(cultivation_data, control_label = "Control", feature_data = NULL) {
+  # Build labels, preferring FinalAnnotation (fallback to Gene), with arrow/Δ/TF prefixes
+  make_label_from_anno <- function(mod, anno, gene, control_label = "Control", delta_symbol = "\u0394") {
+    up_arrow <- "↑"; Encoding(up_arrow) <- "UTF-8"
+    src <- ifelse(!is.na(anno) & nzchar(anno), anno, gene)
+    dplyr::case_when(
+      mod == "Control"         ~ control_label,
+      mod == "Upregulation"    ~ paste0(src),
+      mod == "Knockout"        ~ paste0(src),
+      mod == "TF Upregulation" ~ paste0(src),
+      TRUE ~ src
+    )
+  }
+
+  # Filter to Round 3
+  df0 <- cultivation_data %>%
+    dplyr::filter(Round == 3)
+
+  # Label + mod_key
+  df_lab <- df0 %>%
+    dplyr::mutate(
+      mod_key = dplyr::case_when(
+        Modification == "Control"         ~ "CONTROL",
+        Modification == "Upregulation"    ~ "UPREGULATION",
+        Modification == "Knockout"        ~ "KNOCKOUT",
+        Modification == "TF Upregulation" ~ "TF_UPREG",
+        TRUE ~ toupper(Modification)
+      ),
+      # X is the unified x-axis label used downstream
+      X = make_label_from_anno(Modification, FinalAnnotation, Gene, control_label)
+    )
+
+  # X-order: Control first, then ascending avg_predicted_change (if feature_data provided), else alphabetical
+  if (!is.null(feature_data) && all(c("FinalAnnotation", "avg_predicted_change") %in% names(feature_data))) {
+    ord_tbl <- df_lab %>%
+      dplyr::distinct(X, mod_key, FinalAnnotation, Gene) %>%
+      dplyr::mutate(join_key = dplyr::if_else(!is.na(FinalAnnotation) & nzchar(FinalAnnotation),
+                                              FinalAnnotation, Gene)) %>%
+      dplyr::left_join(
+        feature_data %>%
+          dplyr::distinct(FinalAnnotation, avg_predicted_change),
+        by = c("join_key" = "FinalAnnotation")
+      ) %>%
+      dplyr::mutate(avg_predicted_change = dplyr::if_else(mod_key == "CONTROL", NA_real_, avg_predicted_change))
+
+    non_ctrl <- ord_tbl %>%
+      dplyr::filter(mod_key != "CONTROL") %>%
+      dplyr::arrange(avg_predicted_change) %>%
+      dplyr::pull(X) %>%
+      unique()
+  } else {
+    non_ctrl <- df_lab %>%
+      dplyr::filter(mod_key != "CONTROL") %>%
+      dplyr::pull(X) %>%
+      unique() %>%
+      sort()
+  }
+
+  x_levels <- c(control_label, setdiff(non_ctrl, control_label))
+
+  # Tick colors by modification
+  mod_colors <- c("UPREGULATION" = "#5ab4ac", "KNOCKOUT" = "#d8b365", "CONTROL" = "#000000", "TF_UPREG" = "#8c510a")
+  label_mod_map <- df_lab %>%
+    dplyr::distinct(X, mod_key)
+
+  axis_label_colors <- setNames(
+    dplyr::case_when(
+      label_mod_map$mod_key %in% names(mod_colors) ~ unname(mod_colors[label_mod_map$mod_key]),
+      TRUE ~ "#000000"
+    ),
+    label_mod_map$X
+  )
+
+  # RP levels present in Round 3 (preserve your external ordering downstream if desired)
+  rp_levels <- df_lab$RecombinantProtein %>% unique()
+
+  list(
+    df_lab = df_lab,                 # Round-3 filtered & labeled data (has columns: X, mod_key, etc.)
+    x_levels = x_levels,             # Control first, then ordered non-controls
+    axis_label_colors = axis_label_colors,  # named by X
+    rp_levels = rp_levels            # RPs present in Round 3
+  )
+}
+
+# ================================
+# BUILD (adjust these column names if needed)
+# ================================
+control_label <- "Control"
+
+# Round-3 shared prep (unchanged)
+r3_shared <- prepare_round3_common(
+  AllStrainCultivationResults,
+  control_label = control_label,
+  feature_data  = multimoleculeFSEOF
+)
+
+# Auto-detect replicate columns
+qp_candidates <- c("qp_mg_l_od_hr", "q_p_mg_l_od_hr", "qp", "qpmglodhr")
+qp_columns <- find_rep_cols(r3_shared$df_lab, qp_candidates)
+
+od_candidates <- c("OD_48hr", "od_48hr", "OD48hr")
+od_columns <- find_rep_cols(r3_shared$df_lab, od_candidates)
+
+
+# Two q_p bar plots (one per RP present)
+rp_list <- unique(r3_shared$df_lab$RecombinantProtein)
+if (length(rp_list) < 2) {
+  warning("Only ", length(rp_list), " RP(s) found in Round 3. The layout will include available RPs only.")
+}
+
+make_qp_bar <- function(rp_name, show_legend) {
+  plot_round3_qp_bar_for_rp(
+    df_lab        = r3_shared$df_lab,
+    x_levels      = r3_shared$x_levels,
+    rp_name       = rp_name,
+    qp_columns    = qp_columns,      # <-- now auto-detected
+    control_label = control_label,
+    show_legend   = show_legend
+  )
+}
+
+bars <- lapply(seq_along(rp_list), function(i) {
+  make_qp_bar(rp_list[i], show_legend = (i == 1))
+})
+
+# Strip x-axis from the first bar (top)
+if (length(bars) >= 1) {
+  bars[[1]] <- bars[[1]] +
+    theme(axis.title.x = element_blank(),
+          axis.text.x  = element_blank(),
+          axis.ticks.x = element_blank())
+}
+bars[[2]] <- bars[[2]] + theme(
+  axis.title.x = element_blank(),
+  axis.text.x  = element_blank(),
+  axis.ticks.x = element_blank()
+)
+
+prepare_round3_od_heatmap <- function(df_lab, od_columns, control_label="Control") {
+  rep_cols <- repcols_for_base(df_lab, od_columns)
+  long <- df_lab %>%
+    select(RecombinantProtein, X, mod_key, all_of(rep_cols)) %>%
+    pivot_longer(all_of(rep_cols), names_to="rep", values_to="value") %>%
+    filter(!is.na(value))
+  means <- long %>% group_by(RecombinantProtein, X) %>% summarise(mean_val=mean(value), .groups="drop")
+
+  # drop RP rows with no data at all (after filtering)
+  rp_has_data <- means %>% count(RecombinantProtein) %>% filter(n>0) %>% pull(RecombinantProtein)
+  means <- means %>% filter(RecombinantProtein %in% rp_has_data)
+
+  # stats two-sided
+  stats <- compute_stats_vs_control(long %>% select(RecombinantProtein, X, value),
+                                    control_label=control_label, test_side="two.sided") %>%
+           mutate(n_stars = nchar(sig))
+  agg <- means %>% left_join(stats, by=c("RecombinantProtein","X")) %>%
+         mutate(sig = coalesce(sig,""), n_stars = ifelse(is.na(n_stars), 0L, n_stars))
+  agg
+}
+
+# OD heatmap for Round 3 (two-tailed), keep only RP rows with data
+od_agg <- prepare_round3_od_heatmap(r3_shared$df_lab, od_columns, control_label = control_label)
+
+# Build colored x-tick labels for heatmap (unchanged)
+ggtext_available <- requireNamespace("ggtext", quietly = TRUE)
+x_levels <- r3_shared$x_levels
+axis_label_colors <- r3_shared$axis_label_colors
+levs <- x_levels
+lbls_html <- levs
+axis_labels <- if (ggtext_available)
+  setNames(paste0("<span style='color:", axis_label_colors[levs], "'>", lbls_html, "</span>"), levs)
+end
+
+# OD palette anchors
+ctrl_od_vals <- AllStrainCultivationResults %>%
+  dplyr::filter(Modification == control_label, Round == 3) %>%
+  dplyr::select(dplyr::all_of(od_columns)) %>% as.matrix() %>% as.numeric() %>% stats::na.omit()
+ctrl_od_mean <- if (length(ctrl_od_vals)) mean(ctrl_od_vals) else 0
+max_od <- max(od_agg$mean_val, na.rm = TRUE); if (!is.finite(max_od) || max_od <= 0) max_od <- 1e-8
+min_od <- min(od_agg$mean_val, na.rm = TRUE)
+od_vals <- sort(unique(pmax(pmin(c(0.00*min_od, ctrl_od_mean, max_od) / max_od, 1), 0)))
+
+# Centered stars for heatmap (unchanged)
+pt10_mm <- 10/2.845
+stars_df <- od_agg %>%
+  dplyr::mutate(
+    n_stars_san = pmin(3L, pmax(0L, as.integer(round(dplyr::coalesce(n_stars, 0))))),
+    sig_stack   = vapply(n_stars_san, function(k) if (k <= 0L) "" else paste(rep("*", k), collapse = "\n"),
+                         FUN.VALUE = character(1))
+  )
+#od_vals = c(min(od_agg$mean_val), mean(od_agg$mean_val), max(od_agg$))
+heat_od <- ggplot(od_agg, aes(x = factor(X, levels = x_levels), y = RecombinantProtein, fill = mean_val)) +
+  geom_tile(color = NA) +
+  scale_fill_gradientn(colors = c("#ffffff", "#a6bddb", "#2b8cbe"), 
+                       values = od_vals, limits = c(min_od, max_od), name = "mean(OD 48h)") +
+  geom_text(data = stars_df %>% dplyr::filter(sig_stack != ""),
+            aes(x = factor(X, levels = x_levels), label = sig_stack),
+            hjust = 0.5, vjust = 0.5, lineheight = 1.08, size = pt10_mm) +
+  labs(x = NULL, y = NULL) +
+  theme_bw() +
+  theme(
+    panel.grid = element_blank(),
+    axis.text.x = if (ggtext_available)
+      ggtext::element_markdown(angle = 90, hjust = 1, vjust = 1, size = 10)
+    else
+      element_text(angle = 90, hjust = 1, vjust = 1, size = 10),
+    axis.text.y = element_text(size = 10),
+    legend.title = element_text(size = 10),
+    legend.text  = element_text(size = 10),
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank()
+  ) +
+  scale_x_discrete(labels = axis_labels, drop = FALSE) +
+  scale_y_discrete(drop = FALSE)
+
+# Combine: stack all q_p bars found, then OD heatmap
+heights_vec <- c(rep(1, length(bars)), 0.5)
+combo <- Reduce(`/`, c(bars, list(heat_od))) + plot_layout(heights = heights_vec)
+
+combo
+ggsave("Fig5d.svg", combo, width = 8, height = 4, units = "in")
+
+
+
+```
+##6.5 Supplemental Figures - cost associations
+```{r}
+## ============================================================
+## Cost-per-protein (costppTable) visualization script
+## Aesthetics matched to Fig5a/Fig5b reference code:
+##   theme_bw(), thin major gridlines, no minor gridlines,
+##   axis/facet/legend titles = 12pt, axis text = 10pt,
+##   stroke = 0 points, pastel per-cost-type fills + darker
+##   per-cost-type point colors, median crossbar overlay,
+##   no plot titles, facets labeled by nutrient name
+##
+## Figures:
+##   1. Cost vs proteinSize        (scatter, 4-panel)
+##   2. Cost vs NumDisulfides      (true scatter, 4-panel)
+##   3. Cost vs NumNGlyc           (true scatter, 4-panel)
+##   4. Cost vs ThroughER/Transmembrane/GPIsite
+##      (grouped violin + jittered points, 4-panel)
+##   5. Cost vs Localization       (violin + jitter, 4-panel)
+##   6. 4x4 scatterplot matrix of the four nutrient costs
+##   7. AA composition (raw count & % ) vs cost correlation heatmap
+##   8. Fixed vs. variable cost decomposition (nls fit)
+##   9. Partial correlation (raw AA count vs cost, controlling for
+##      sequence length) vs. the uncontrolled correlation
+##  10. Total demand (Cost x proteinSize) vs proteinSize, recovering
+##      the size-scaling implied by the Fig 8 fixed/variable fit
+##  11. Differential expression (Her2 - nb3B2) vs nutrient cost --
+##      tests whether high-cost genes are induced specifically under
+##      IgG1 (Her2) production relative to nanobody (nb3B2) production
+## ============================================================
+
+library(tidyverse)
+library(patchwork)
+
+cost_cols <- c("SulfCost", "PhosphCost", "NitrCost", "CarbCost")
+
+# Facet labels: actual nutrient names instead of column names
+nutrient_labels <- c(
+  SulfCost   = "Sulfur",
+  PhosphCost = "Phosphorus",
+  NitrCost   = "Nitrogen",
+  CarbCost   = "Carbon"
+)
+nutrient_labeller <- as_labeller(nutrient_labels)
+
+## ------------------------------------------------------------
+## Shared aesthetics (matched to the Fig5a/Fig5b reference code)
+## Axis/facet/legend TITLES = 12pt, axis TEXT = 10pt.
+## (No font family is forced -- uses whatever your system default is,
+## to avoid "font family not found" warnings on Windows.)
+## ------------------------------------------------------------
+theme_pub <- theme_bw() +
+  theme(
+    panel.grid.minor  = element_blank(),
+    panel.grid.major  = element_line(linewidth = 0.2),
+    axis.title        = element_text(size = 12),
+    axis.text         = element_text(size = 10),
+    strip.text        = element_text(size = 12, face = "bold"),
+    strip.background  = element_rect(fill = "grey90", color = NA),
+    legend.text       = element_text(size = 10),
+    legend.title       = element_text(size = 12),
+    plot.title        = element_blank(),
+    plot.margin       = margin(4, 4, 4, 4)
+  )
+
+# Pastel panel/violin fills, one per cost type (same family as Fig5a)
+cost_fill_map <- c(
+  SulfCost   = "#fde0dd",
+  PhosphCost = "#e0ecf4",
+  NitrCost   = "#e5f5e0",
+  CarbCost   = "#fff7bc"
+)
+
+# Darker, saturated colors for points/edges, same hue family as above
+cost_point_map <- c(
+  SulfCost   = "#c9184a",
+  PhosphCost = "#2166ac",
+  NitrCost   = "#1b7837",
+  CarbCost   = "#b8860b"
+)
+
+## ------------------------------------------------------------
+## Base long-format table: one row per Gene x CostType
+## ------------------------------------------------------------
+costLong <- costppTable %>%
+  select(Gene, proteinSize, NumDisulfides, NumNGlyc, NumOGlyc,
+         ThroughER, Transmembrane, GPIsite, Localization,
+         all_of(cost_cols)) %>%
+  pivot_longer(cols = all_of(cost_cols),
+               names_to = "CostType", values_to = "CostValue") %>%
+  mutate(CostType = factor(CostType, levels = cost_cols))
+
+## ============================================================
+## FIGURE 1: Cost vs proteinSize (scatter)
+## ============================================================
+fig1 <- ggplot(costLong, aes(x = proteinSize, y = CostValue, color = CostType)) +
+  geom_point(alpha = 0.6, size = 1.5, stroke = 0, show.legend = FALSE) +
+  facet_wrap(~CostType, scales = "free_y", ncol = 2, labeller = nutrient_labeller) +
+  scale_color_manual(values = cost_point_map) +
+  labs(x = "Protein Size (aa)", y = "Cost") +
+  theme_pub
+
+fig1
+
+## ============================================================
+## FIGURE 2: Cost vs NumDisulfides (true scatter, no jitter)
+## ============================================================
+fig2 <- ggplot(costLong, aes(x = NumDisulfides, y = CostValue, color = CostType)) +
+  geom_point(alpha = 0.6, size = 1.5, stroke = 0, show.legend = FALSE) +
+  facet_wrap(~CostType, scales = "free_y", ncol = 2, labeller = nutrient_labeller) +
+  scale_color_manual(values = cost_point_map) +
+  scale_x_continuous(breaks = scales::breaks_pretty()) +
+  labs(x = "Number of Disulfide Bonds", y = "Cost") +
+  theme_pub
+
+fig2
+
+## ============================================================
+## FIGURE 3: Cost vs NumNGlyc (true scatter, no jitter)
+## ============================================================
+fig3 <- ggplot(costLong, aes(x = NumNGlyc, y = CostValue, color = CostType)) +
+  geom_point(alpha = 0.6, size = 1.5, stroke = 0, show.legend = FALSE) +
+  facet_wrap(~CostType, scales = "free_y", ncol = 2, labeller = nutrient_labeller) +
+  scale_color_manual(values = cost_point_map) +
+  scale_x_continuous(breaks = scales::breaks_pretty()) +
+  labs(x = "Number of N-glycosylation Sites", y = "Cost") +
+  theme_pub
+
+fig3
+
+## ============================================================
+## FIGURE 4: Cost vs ThroughER / Transmembrane / GPIsite
+## Grouped violin + jittered points, block-ordered so each
+## feature's 0/1 pair sits next to each other
+## ============================================================
+feature_levels <- c("ThroughER", "Transmembrane", "GPIsite")
+feature_colors <- c(ThroughER = "#0072B2", Transmembrane = "#E69F00", GPIsite = "#009E73")
+
+# explicit block-ordered levels: value varies fastest WITHIN each feature block
+xgroup_levels <- paste(rep(feature_levels, each = 2), rep(c("0", "1"), times = 3), sep = "_")
+
+binaryLong <- costLong %>%
+  select(Gene, CostType, CostValue, ThroughER, Transmembrane, GPIsite) %>%
+  pivot_longer(cols = all_of(feature_levels),
+               names_to = "Feature", values_to = "FeatureValue") %>%
+  mutate(
+    Feature      = factor(Feature, levels = feature_levels),
+    FeatureValue = factor(FeatureValue, levels = c(0, 1)),
+    xGroup       = factor(paste(Feature, FeatureValue, sep = "_"), levels = xgroup_levels)
+  )
+
+fig4 <- ggplot(binaryLong, aes(x = xGroup, y = CostValue, fill = Feature)) +
+  geom_violin(alpha = 0.75, scale = "width", trim = FALSE, color = "grey30") +
+  geom_jitter(aes(color = Feature), width = 0.15, height = 0, alpha = 0.4,
+              size = 0.9, stroke = 0, show.legend = FALSE) +
+  stat_summary(fun = median, geom = "crossbar", width = 0.45,
+               fatten = 0, color = "grey10", alpha = 0.6) +
+  facet_wrap(~CostType, scales = "free_y", ncol = 2, labeller = nutrient_labeller) +
+  scale_fill_manual(values = feature_colors) +
+  scale_color_manual(values = feature_colors) +
+  scale_x_discrete(labels = function(x) sub("^[^_]+_", "", x)) +
+  labs(x = NULL, y = "Cost", fill = "Feature") +
+  theme_pub
+
+fig4
+
+## ============================================================
+## FIGURE 5: Cost vs Localization (violin + jitter)
+## Rows with multiple localizations (comma-separated) contribute
+## a point/violin-membership to each listed compartment
+## ============================================================
+locMap <- c(
+  c = "Cytoplasm",             n = "Nucleus",
+  v = "Vacuole",                t = "Transmembrane",
+  e = "Extracellular",          m = "Mitochondrial",
+  r = "Endoplasmic Reticulum",  g = "Golgi",
+  x = "Peroxisome",             i = "Mito. Intermembrane Space"
+)
+
+locLong <- costLong %>%
+  select(Gene, CostType, CostValue, Localization) %>%
+  separate_rows(Localization, sep = ",\\s*") %>%
+  mutate(
+    Localization = str_trim(Localization),
+    LocLabel = recode(Localization, !!!locMap)
+  ) %>%
+  filter(!is.na(LocLabel), LocLabel != "")
+
+fig5 <- ggplot(locLong, aes(x = LocLabel, y = CostValue, fill = CostType)) +
+  geom_violin(alpha = 0.6, scale = "width", trim = FALSE, color = "grey30",
+              show.legend = FALSE) +
+  geom_jitter(aes(color = CostType), width = 0.15, alpha = 0.2, size = 1,
+              stroke = 0, show.legend = FALSE) +
+  stat_summary(fun = median, geom = "crossbar", width = 0.45,
+               fatten = 0, color = "grey10", alpha = 0.6) +
+  facet_wrap(~CostType, scales = "free_y", ncol = 2, labeller = nutrient_labeller) +
+  scale_fill_manual(values = cost_fill_map) +
+  scale_color_manual(values = cost_point_map) +
+  labs(x = "Subcellular Localization", y = "Cost") +
+  theme_pub +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 10))
+
+fig5
+
+## ============================================================
+## FIGURE 6: 4x4 scatterplot matrix of the four nutrient costs
+## Lower triangle + diagonal = pairwise scatterplots (with Pearson r
+## printed in the top-right corner of each panel).
+## Upper triangle = heatmap tile colored by Pearson r.
+## ============================================================
+pearson_mat <- cor(costppTable[, cost_cols], use = "pairwise.complete.obs")
+
+panel_list <- vector("list", length(cost_cols)^2)
+idx <- 1
+
+for (i in seq_along(cost_cols)) {          # row -> y variable
+  for (j in seq_along(cost_cols)) {        # col -> x variable
+
+    yvar  <- cost_cols[i]
+    xvar  <- cost_cols[j]
+    r_val <- pearson_mat[yvar, xvar]
+    is_upper <- j > i
+
+    if (is_upper) {
+      ## ---- upper triangle: heatmap tile colored by Pearson r ----
+      p <- ggplot(data.frame(x = 1, y = 1, r = r_val), aes(x = x, y = y, fill = r)) +
+        geom_tile() +
+        geom_text(aes(label = sprintf("%.2f", r)), size = 3.5, color = "grey10") +
+        scale_fill_gradient2(low = "#2166ac", mid = "white", high = "#c9184a",
+                              midpoint = 0, limits = c(-1, 1), guide = "none") +
+        theme_void() +
+        theme(plot.margin = margin(2, 2, 2, 2))
+
+    } else {
+      ## ---- lower triangle + diagonal: pairwise scatterplot ----
+      dat <- costppTable %>% select(all_of(c(xvar, yvar))) %>% drop_na()
+
+      p <- ggplot(dat, aes(x = .data[[xvar]], y = .data[[yvar]])) +
+        geom_point(alpha = 0.5, size = 0.8, stroke = 0,
+                    color = cost_point_map[[yvar]]) +
+        annotate("text", x = Inf, y = Inf, hjust = 1.15, vjust = 1.6,
+                 label = sprintf("r = %.2f", r_val), size = 3, color = "grey10") +
+        theme_pub
+    }
+
+    ## axis labels only on the bottom row / left column, like a pairs plot.
+    ## Blank axis.title.x / axis.title.y individually (not axis.title as a
+    ## whole) so the edge-panel labels set via labs() below still render.
+    if (i == length(cost_cols)) {
+      p <- p + labs(x = nutrient_labels[[xvar]])
+    } else {
+      p <- p + theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(),
+                      axis.title.x = element_blank())
+    }
+    if (j == 1) {
+      p <- p + labs(y = nutrient_labels[[yvar]])
+    } else {
+      p <- p + theme(axis.text.y = element_blank(), axis.ticks.y = element_blank(),
+                      axis.title.y = element_blank())
+    }
+
+    panel_list[[idx]] <- p
+    idx <- idx + 1
+  }
+}
+
+fig6 <- patchwork::wrap_plots(panel_list, nrow = length(cost_cols), ncol = length(cost_cols))
+
+fig6
+
+## ============================================================
+## FIGURE 7: AA composition vs. cost -- raw count vs. % composition
+## Heatmap of Pearson r between each of the 20 amino acids (as raw
+## count, and as % of sequence) and each of the 4 nutrient costs.
+## Amino acids are grouped by biochemical property for interpretability.
+## ============================================================
+aa_letters <- c("G","A","V","L","I","P","M",   # nonpolar aliphatic
+                 "F","W","Y",                   # aromatic
+                 "S","T","C","N","Q",           # polar uncharged
+                 "K","R","H",                   # basic
+                 "D","E")                       # acidic
+
+aaCounts <- costppTable %>%
+  select(Gene, Sequence, all_of(cost_cols)) %>%
+  mutate(SeqLength = nchar(Sequence))
+
+count_mat <- sapply(aa_letters, function(aa) str_count(aaCounts$Sequence, fixed(aa)))
+colnames(count_mat) <- aa_letters
+aaCounts <- bind_cols(aaCounts, as_tibble(count_mat))
+
+aaLong <- aaCounts %>%
+  pivot_longer(all_of(aa_letters), names_to = "AA", values_to = "Count") %>%
+  mutate(Pct = 100 * Count / SeqLength) %>%
+  pivot_longer(all_of(cost_cols), names_to = "CostType", values_to = "CostValue")
+
+corr_summary <- aaLong %>%
+  group_by(AA, CostType) %>%
+  summarise(
+    r_count = cor(Count, CostValue, use = "pairwise.complete.obs"),
+    p_count = tryCatch(cor.test(Count, CostValue)$p.value, error = function(e) NA_real_),
+    r_pct   = cor(Pct, CostValue, use = "pairwise.complete.obs"),
+    p_pct   = tryCatch(cor.test(Pct, CostValue)$p.value, error = function(e) NA_real_),
+    .groups = "drop"
+  )
+
+sig_stars <- function(p) {
+  case_when(
+    is.na(p) ~ "",
+    p < 0.001 ~ "***",
+    p < 0.01  ~ "**",
+    p < 0.05  ~ "*",
+    TRUE ~ ""
+  )
+}
+
+corr_long <- corr_summary %>%
+  pivot_longer(cols = c(r_count, r_pct), names_to = "MetricKey", values_to = "r") %>%
+  mutate(
+    p = if_else(MetricKey == "r_count", p_count, p_pct),
+    Metric = recode(MetricKey, r_count = "Raw Count", r_pct = "% Composition"),
+    Metric = factor(Metric, levels = c("Raw Count", "% Composition")),
+    Stars = sig_stars(p),
+    CostLabel = factor(nutrient_labels[CostType], levels = nutrient_labels[cost_cols]),
+    AA = factor(AA, levels = rev(aa_letters))
+  )
+
+fig7 <- ggplot(corr_long, aes(x = CostLabel, y = AA, fill = r)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = Stars), vjust = 0.75, size = 3.5, color = "grey10") +
+  facet_wrap(~Metric, ncol = 2) +
+  scale_fill_gradient2(low = "#2166ac", mid = "white", high = "#c9184a",
+                        midpoint = 0, limits = c(-1, 1), name = "Pearson r") +
+  labs(x = NULL, y = "Amino Acid") +
+  theme_pub +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+fig7
+
+
+## ============================================================
+## FIGURE 8: Fixed vs. variable cost decomposition
+## Fits cost = a + b/proteinSize (nls) per nutrient. 'a' is the
+## size-independent, per-unit variable cost; 'b' is the fixed,
+## one-time overhead (translation initiation, PTMs, chaperone
+## cycles, etc.) that gets diluted out as protein size grows.
+## ============================================================
+library(broom)
+
+fit_cost_model <- function(df) {
+  start_a <- max(min(df$CostValue, na.rm = TRUE), 1e-6)
+  start_b <- max(median(df$proteinSize * (df$CostValue - start_a), na.rm = TRUE), 1)
+  nls(CostValue ~ a + b / proteinSize, data = df,
+      start = list(a = start_a, b = start_b),
+      control = nls.control(maxiter = 200, warnOnly = TRUE))
+}
+
+nls_fits <- map_dfr(cost_cols, function(ct) {
+  df <- costLong %>% filter(CostType == ct, is.finite(proteinSize), proteinSize > 0)
+  fit <- fit_cost_model(df)
+  tidy(fit) %>% mutate(CostType = ct)
+})
+
+median_size <- median(costLong$proteinSize, na.rm = TRUE)
+
+nls_summary <- nls_fits %>%
+  select(CostType, term, estimate) %>%
+  pivot_wider(names_from = term, values_from = estimate) %>%
+  mutate(
+    FixedAtMedian     = b / median_size,
+    PredictedAtMedian = a + b / median_size,
+    PctFixed          = 100 * FixedAtMedian / PredictedAtMedian,
+    CostType          = factor(CostType, levels = cost_cols)
+  )
+
+print(nls_summary)  # a = variable cost/unit, b = fixed overhead, PctFixed = % fixed at median protein size
+
+curve_df <- map_dfr(cost_cols, function(ct) {
+  rng  <- range(costLong$proteinSize[costLong$CostType == ct], na.rm = TRUE)
+  xseq <- seq(rng[1], rng[2], length.out = 200)
+  cf   <- nls_summary %>% filter(CostType == ct)
+  tibble(CostType = ct, proteinSize = xseq, CostValue = cf$a + cf$b / xseq)
+}) %>%
+  mutate(CostType = factor(CostType, levels = cost_cols))
+
+fig8 <- ggplot(costLong, aes(x = proteinSize, y = CostValue)) +
+  geom_point(aes(color = CostType), alpha = 0.35, size = 1.1, stroke = 0, show.legend = FALSE) +
+  geom_line(data = curve_df, color = "black", linewidth = 0.8) +
+  geom_text(data = nls_summary,
+            aes(x = Inf, y = Inf, label = sprintf("%.0f%% fixed\n(at median size)", PctFixed)),
+            hjust = 1.1, vjust = 1.4, size = 3, color = "grey15", inherit.aes = FALSE) +
+  facet_wrap(~CostType, scales = "free_y", ncol = 2, labeller = nutrient_labeller) +
+  scale_color_manual(values = cost_point_map) +
+  labs(x = "Protein Size (aa)", y = "Cost") +
+  theme_pub
+
+fig8
+
+## ============================================================
+## FIGURE 9: Partial correlation heatmap (raw AA count vs. cost,
+## controlling for sequence length)
+## Compares the naive (confounded) Pearson r against the partial r
+## after regressing both Count and CostValue on SeqLength and
+## correlating the residuals -- isolating the AA-specific signal
+## from the shared "bigger protein -> more of everything" trend.
+## ============================================================
+partial_cor_test <- function(x, y, z) {
+  d <- data.frame(x, y, z) %>% drop_na()
+  n <- nrow(d)
+  if (n < 4) return(c(r = NA_real_, p = NA_real_))
+  rx <- resid(lm(x ~ z, data = d))
+  ry <- resid(lm(y ~ z, data = d))
+  r  <- cor(rx, ry)
+  df <- n - 3
+  tstat <- r * sqrt(df / (1 - r^2))
+  p <- 2 * pt(-abs(tstat), df)
+  c(r = r, p = p)
+}
+
+combo_grid <- expand.grid(AA = aa_letters, CostType = cost_cols, stringsAsFactors = FALSE)
+
+partial_results <- pmap_dfr(combo_grid, function(AA, CostType) {
+  sub <- aaLong %>% filter(AA == .env$AA, CostType == .env$CostType)
+  raw_r <- cor(sub$Count, sub$CostValue, use = "pairwise.complete.obs")
+  raw_p <- tryCatch(cor.test(sub$Count, sub$CostValue)$p.value, error = function(e) NA_real_)
+  pc    <- partial_cor_test(sub$Count, sub$CostValue, sub$SeqLength)
+  tibble(AA = AA, CostType = CostType,
+         r_raw = raw_r, p_raw = raw_p,
+         r_partial = pc[["r"]], p_partial = pc[["p"]])
+})
+
+partial_long <- partial_results %>%
+  pivot_longer(cols = c(r_raw, r_partial), names_to = "MetricKey", values_to = "r") %>%
+  mutate(
+    p = if_else(MetricKey == "r_raw", p_raw, p_partial),
+    Metric = recode(MetricKey, r_raw = "Uncontrolled r", r_partial = "Partial r (size-controlled)"),
+    Metric = factor(Metric, levels = c("Uncontrolled r", "Partial r (size-controlled)")),
+    Stars = sig_stars(p),
+    CostLabel = factor(nutrient_labels[CostType], levels = nutrient_labels[cost_cols]),
+    AA = factor(AA, levels = rev(aa_letters))
+  )
+
+fig9 <- ggplot(partial_long, aes(x = CostLabel, y = AA, fill = r)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = Stars), vjust = 0.75, size = 3.5, color = "grey10") +
+  facet_wrap(~Metric, ncol = 2) +
+  scale_fill_gradient2(low = "#2166ac", mid = "white", high = "#c9184a",
+                        midpoint = 0, limits = c(-1, 1), name = "Pearson r") +
+  labs(x = NULL, y = "Amino Acid") +
+  theme_pub +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+fig9
+
+
+## ============================================================
+## FIGURE 10: Total demand (Cost x proteinSize) vs proteinSize
+## Cost (from Fig 1/8) behaves like a per-residue quantity -- it's
+## Fixed/size + Variable. Multiplying back through by size recovers
+## TOTAL demand per molecule: TotalCost = a*size + b, using the same
+## a (variable cost/residue) and b (fixed overhead) fit in Figure 8.
+## Total demand should now trend UP with size, even though per-residue
+## cost trends down -- reconciling why large, PTM-heavy proteins can
+## be big overall consumers of a resource despite looking "efficient"
+## on a per-unit basis.
+## ============================================================
+totalLong <- costLong %>%
+  mutate(TotalCost = CostValue * proteinSize)
+
+totalCurve_df <- map_dfr(cost_cols, function(ct) {
+  rng  <- range(totalLong$proteinSize[totalLong$CostType == ct], na.rm = TRUE)
+  xseq <- seq(rng[1], rng[2], length.out = 200)
+  cf   <- nls_summary %>% filter(CostType == ct)
+  tibble(CostType = ct, proteinSize = xseq, TotalCost = cf$a * xseq + cf$b)
+}) %>%
+  mutate(CostType = factor(CostType, levels = cost_cols))
+
+eqn_labels <- nls_summary %>%
+  mutate(Label = sprintf("Total = %.3g*size + %.3g", a, b))
+
+fig10 <- ggplot(totalLong, aes(x = proteinSize, y = TotalCost)) +
+  geom_point(aes(color = CostType), alpha = 0.35, size = 1.1, stroke = 0, show.legend = FALSE) +
+  geom_line(data = totalCurve_df, color = "black", linewidth = 0.8) +
+  geom_text(data = eqn_labels, aes(x = -Inf, y = Inf, label = Label),
+            hjust = -0.05, vjust = 1.4, size = 2.8, color = "grey15", inherit.aes = FALSE) +
+  facet_wrap(~CostType, scales = "free_y", ncol = 2, labeller = nutrient_labeller) +
+  scale_color_manual(values = cost_point_map) +
+  labs(x = "Protein Size (aa)", y = "Total Demand (Cost x Size)") +
+  theme_pub
+
+fig10
+
+
+## ============================================================
+## FIGURE 11: Differential expression (Her2 - nb3B2) vs nutrient cost
+## Tests whether genes with high cost for a given nutrient are
+## transcriptionally induced specifically under IgG1 (Her2) production
+## relative to nanobody (nb3B2) production -- consistent with the
+## hypothesis that IgG1's heavier PTM/chaperone burden drives up
+## expression of high-cost genes in a way nanobody production doesn't.
+## ============================================================
+diffExpr <- costppTable %>%
+  select(Gene, Her2_1.MeOH_avg, nb3B2_1.MeOH_avg) %>%
+  mutate(DiffExpr = Her2_1.MeOH_avg - nb3B2_1.MeOH_avg)
+
+diffLong <- costLong %>%
+  left_join(diffExpr, by = "Gene") %>%
+  filter(!is.na(DiffExpr))
+
+corr_diff <- diffLong %>%
+  group_by(CostType) %>%
+  summarise(
+    r = cor(CostValue, DiffExpr, use = "pairwise.complete.obs"),
+    p = tryCatch(cor.test(CostValue, DiffExpr)$p.value, error = function(e) NA_real_),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    Label    = sprintf("r = %.2f%s", r, sig_stars(p)),
+    CostType = factor(CostType, levels = cost_cols)
+  )
+
+fig11 <- ggplot(diffLong, aes(x = CostValue, y = DiffExpr, color = CostType)) +
+  geom_hline(yintercept = 0, linetype = "dashed", linewidth = 0.3, color = "grey50") +
+  geom_point(alpha = 0.4, size = 1.1, stroke = 0, show.legend = FALSE) +
+  geom_smooth(method = "lm", se = TRUE, color = "black", linewidth = 0.6, show.legend = FALSE) +
+  geom_text(data = corr_diff, aes(x = Inf, y = Inf, label = Label),
+            hjust = 1.1, vjust = 1.4, size = 3, color = "grey15", inherit.aes = FALSE) +
+  facet_wrap(~CostType, scales = "free", ncol = 2, labeller = nutrient_labeller) +
+  scale_color_manual(values = cost_point_map) +
+  labs(x = "Nutrient Cost", y = "Differential Expression (Her2 - nb3B2, L2TPM)") +
+  theme_pub
+
+fig11
+
+
+## ============================================================
+## Optional: save all eleven as PDFs (uncomment if wanted)
+## ============================================================
+# ggsave("fig1_cost_vs_proteinSize.pdf", fig1, device = cairo_pdf, width = 8, height = 6)
+# ggsave("fig2_cost_vs_disulfides.pdf",  fig2, device = cairo_pdf, width = 8, height = 6)
+# ggsave("fig3_cost_vs_nglyc.pdf",       fig3, device = cairo_pdf, width = 8, height = 6)
+# ggsave("fig4_cost_vs_ER_TM_GPI.pdf",   fig4, device = cairo_pdf, width = 9, height = 6)
+# ggsave("fig5_cost_vs_localization.pdf",fig5, device = cairo_pdf, width = 9, height = 6)
+# ggsave("fig6_cost_correlation.pdf",    fig6, device = cairo_pdf, width = 8, height = 8)
+# ggsave("fig7_aa_composition_correlation.pdf", fig7, device = cairo_pdf, width = 8, height = 7)
+# ggsave("fig8_fixed_vs_variable_cost.pdf", fig8, device = cairo_pdf, width = 8, height = 6)
+# ggsave("fig9_partial_correlation.pdf", fig9, device = cairo_pdf, width = 8, height = 7)
+# ggsave("fig10_total_demand_vs_size.pdf", fig10, device = cairo_pdf, width = 8, height = 6)
+# ggsave("fig11_diffexpr_vs_cost.pdf", fig11, device = cairo_pdf, width = 8, height = 6)
+```
+##6.6 Supplemental Figures - Regressions
+```{r}
+## ============================================================
+## Expanded regression analysis: ALL knockout strains (all Rounds,
+## all RecombinantProteins) from AllStrainCultivationResults, using
+## the FC_1/2/3 columns already provided, joined to costppTable.
+##
+## Adds a formal interaction test: does each nutrient cost's effect
+## on knockout fold-change significantly DIFFER across recombinant
+## proteins, rather than just eyeballing separate per-RP CIs?
+##
+## Assumes this runs in a session that already has: costppTable,
+## cost_cols, nutrient_labels, theme_pub, cost_point_map, sig_stars(),
+## AllStrainCultivationResults, and the tidyverse/broom loaded.
+## ============================================================
+library(broom)
+
+if (!exists("sig_stars")) {
+  sig_stars <- function(p) {
+    dplyr::case_when(
+      is.na(p) ~ "", p < 0.001 ~ "***", p < 0.01 ~ "**", p < 0.05 ~ "*", TRUE ~ ""
+    )
+  }
+}
+
+## ------------------------------------------------------------
+## Build one Log2FC per Gene x RecombinantProtein, averaging the
+## FC_1/2/3 replicate columns AND across any repeated Rounds/StrainIDs
+## for that same Gene x RecombinantProtein combination.
+## ------------------------------------------------------------
+ko_all <- AllStrainCultivationResults %>%
+  filter(Modification == "Knockout") %>%
+  select(RecombinantProtein, Gene, Round, StrainID, FC_1, FC_2, FC_3) %>%
+  rowwise() %>%
+  mutate(FC_row_mean = mean(c(FC_1, FC_2, FC_3), na.rm = TRUE)) %>%
+  ungroup() %>%
+  filter(is.finite(FC_row_mean), FC_row_mean > 0)
+
+ko_fc_all <- ko_all %>%
+  group_by(RecombinantProtein, Gene) %>%
+  summarise(
+    FoldChange  = mean(FC_row_mean, na.rm = TRUE),
+    n_strains   = dplyr::n_distinct(StrainID),
+    n_rounds    = dplyr::n_distinct(Round),
+    .groups = "drop"
+  ) %>%
+  mutate(Log2FC = log2(FoldChange))
+
+ko_fc_all_costs <- ko_fc_all %>%
+  left_join(costppTable %>% select(Gene, all_of(cost_cols)), by = "Gene") %>%
+  drop_na(Log2FC, all_of(cost_cols))
+
+cat("Knockout genes with cost data, per recombinant protein (all rounds):\n")
+print(ko_fc_all_costs %>% count(RecombinantProtein, name = "n_knockouts"))
+
+dropped <- nrow(ko_fc_all) - nrow(ko_fc_all_costs)
+if (dropped > 0) {
+  cat("\nNOTE:", dropped, "Gene x RecombinantProtein rows were dropped for missing",
+      "cost data or non-matching Gene IDs -- worth spot-checking against costppTable$Gene.\n")
+}
+
+## Standardize costs GLOBALLY (not per RP) so main-effect and
+## interaction coefficients are on a common, comparable scale.
+ko_fc_all_z <- ko_fc_all_costs %>%
+  mutate(across(all_of(cost_cols), ~ as.numeric(scale(.))))
+
+rp_levels_all <- sort(unique(ko_fc_all_z$RecombinantProtein))
+ref_rp <- if ("Trastuzumab" %in% rp_levels_all) "Trastuzumab" else rp_levels_all[1]
+ko_fc_all_z <- ko_fc_all_z %>%
+  mutate(RecombinantProtein = relevel(factor(RecombinantProtein), ref = ref_rp))
+
+cat("\nReference RecombinantProtein for interaction model:", ref_rp, "\n\n")
+
+## ============================================================
+## Per-RP regressions (extends the earlier 2-panel forest plot to
+## however many recombinant proteins are present)
+## ============================================================
+min_n <- length(cost_cols) + 2  # need at least this many obs to fit safely
+
+fc_models_all <- ko_fc_all_z %>%
+  group_by(RecombinantProtein) %>%
+  filter(dplyr::n() >= min_n) %>%
+  group_modify(function(.x, .y) {
+    mod <- lm(reformulate(cost_cols, response = "Log2FC"), data = .x)
+    cat("=== Log2FC(FC) ~ costs :", as.character(.y$RecombinantProtein),
+        "(n =", nrow(.x), ") ===\n")
+    print(summary(mod))
+    tidy(mod, conf.int = TRUE)
+  }) %>%
+  ungroup()
+
+coef_fc_all <- fc_models_all %>%
+  filter(term %in% cost_cols) %>%
+  mutate(
+    Nutrient = factor(nutrient_labels[term], levels = nutrient_labels[cost_cols]),
+    Stars    = sig_stars(p.value)
+  )
+
+nutrient_color_map <- setNames(cost_point_map, nutrient_labels[names(cost_point_map)])
+
+fig13 <- ggplot(coef_fc_all, aes(x = estimate, y = Nutrient, color = Nutrient)) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey50", linewidth = 0.3) +
+  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high), height = 0.2, linewidth = 0.5) +
+  geom_point(size = 2) +
+  geom_text(aes(label = Stars), vjust = -0.8, size = 3.5, color = "grey15") +
+  facet_wrap(~RecombinantProtein, ncol = 1, scales = "free_x") +
+  scale_color_manual(values = nutrient_color_map) +
+  labs(x = "Standardized coefficient (95% CI)", y = NULL,
+       title = NULL) +
+  theme_pub +
+  theme(legend.position = "none")
+
+fig13
+
+## ============================================================
+## FORMAL INTERACTION MODEL:
+## Log2FC ~ (SulfCost + PhosphCost + NitrCost + CarbCost) * RecombinantProtein
+## The Cost:RecombinantProtein terms directly test whether that
+## nutrient's effect significantly differs from the reference RP.
+## ============================================================
+inter_formula <- as.formula(
+  paste("Log2FC ~ (", paste(cost_cols, collapse = " + "), ") * RecombinantProtein")
+)
+lm_interaction <- lm(inter_formula, data = ko_fc_all_z)
+
+cat("\n=== Interaction model: Log2FC ~ costs * RecombinantProtein (ref =", ref_rp, ") ===\n")
+print(summary(lm_interaction))
+
+# ANOVA-style test of whether adding the interaction terms as a block
+# improves fit over the main-effects-only model (formal test that the
+# cost-effects differ AT ALL across recombinant proteins)
+lm_main_only <- lm(reformulate(c(cost_cols, "RecombinantProtein"), response = "Log2FC"),
+                    data = ko_fc_all_z)
+cat("\n=== Does allowing cost effects to vary by RecombinantProtein improve fit? ===\n")
+print(anova(lm_main_only, lm_interaction))
+
+## ------------------------------------------------------------
+## Coefficient plot of just the interaction terms -- this is the
+## direct visual answer to "does Phosphorus's slope differ by RP"
+## ------------------------------------------------------------
+interaction_coefs <- tidy(lm_interaction, conf.int = TRUE) %>%
+  filter(stringr::str_detect(term, ":")) %>%
+  mutate(
+    CostTerm = stringr::str_extract(term, paste(cost_cols, collapse = "|")),
+    RPTerm   = stringr::str_remove(term, paste0("^", CostTerm, ":RecombinantProtein")),
+    Nutrient = factor(nutrient_labels[CostTerm], levels = nutrient_labels[cost_cols]),
+    Stars    = sig_stars(p.value),
+    Label    = paste0(RPTerm, " vs. ", ref_rp)
+  )
+
+fig14 <- ggplot(interaction_coefs, aes(x = estimate, y = Nutrient, color = Nutrient)) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey50", linewidth = 0.3) +
+  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high), height = 0.2, linewidth = 0.5) +
+  geom_point(size = 2) +
+  geom_text(aes(label = Stars), vjust = -0.8, size = 3.5, color = "grey15") +
+  facet_wrap(~Label, ncol = 1, scales = "free_x") +
+  scale_color_manual(values = nutrient_color_map) +
+  labs(x = "Interaction coefficient (95% CI)\n(difference in slope vs. reference protein)",
+       y = NULL) +
+  theme_pub +
+  theme(legend.position = "none")
+
+fig14
+
+## ============================================================
+## FIGURE 15: Implied per-protein slope for Phosphorus & Sulfur
+## Combines the main effect + interaction term (with correct combined
+## SE from the model's covariance matrix) into one slope estimate per
+## RecombinantProtein -- this is the "manuscript panel" version of
+## the interaction test: one clean plot showing each protein's actual
+## cost-benefit slope, not just the interaction contrast vs. reference.
+## ============================================================
+get_slope_by_rp <- function(model, cost_var, rp_var = "RecombinantProtein") {
+  rp_levels  <- levels(model$model[[rp_var]])
+  ref_level  <- rp_levels[1]
+  vc         <- vcov(model)
+  cf         <- coef(model)
+  df_resid   <- df.residual(model)
+  tcrit      <- qt(0.975, df_resid)
+
+  map_dfr(rp_levels, function(rp) {
+    if (rp == ref_level) {
+      est <- unname(cf[cost_var])
+      var_est <- vc[cost_var, cost_var]
+      is_ref <- TRUE
+    } else {
+      inter_name <- paste0(cost_var, ":", rp_var, rp)
+      if (!inter_name %in% names(cf)) return(NULL)
+      est <- unname(cf[cost_var] + cf[inter_name])
+      var_est <- vc[cost_var, cost_var] + vc[inter_name, inter_name] +
+                 2 * vc[cost_var, inter_name]
+      is_ref <- FALSE
+    }
+    se <- sqrt(var_est)
+    tibble(
+      RecombinantProtein = rp, is_ref = is_ref,
+      estimate = est, se = se,
+      conf.low  = est - tcrit * se,
+      conf.high = est + tcrit * se,
+      p.value   = 2 * pt(-abs(est / se), df_resid)
+    )
+  })
+}
+
+slope_summary <- bind_rows(
+  get_slope_by_rp(lm_interaction, "PhosphCost") %>% mutate(Nutrient = "Phosphorus"),
+  get_slope_by_rp(lm_interaction, "SulfCost")   %>% mutate(Nutrient = "Sulfur")
+) %>%
+  mutate(
+    Nutrient = factor(Nutrient, levels = c("Phosphorus", "Sulfur")),
+    Stars    = sig_stars(p.value),
+    ProteinLabel = if_else(is_ref, paste0(RecombinantProtein, " (ref)"), RecombinantProtein)
+  )
+
+# order proteins by their Phosphorus slope so the pattern reads top-to-bottom
+protein_order <- slope_summary %>%
+  filter(Nutrient == "Phosphorus") %>%
+  arrange(desc(estimate)) %>%
+  pull(RecombinantProtein)
+
+slope_summary <- slope_summary %>%
+  mutate(RecombinantProtein = factor(RecombinantProtein, levels = protein_order))
+
+fig15 <- ggplot(slope_summary, aes(x = estimate, y = RecombinantProtein)) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey50", linewidth = 0.3) +
+  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high, color = Nutrient),
+                 height = 0.2, linewidth = 0.6,
+                 position = position_dodge(width = 0.5)) +
+  geom_point(aes(color = Nutrient, shape = is_ref), size = 2.5,
+             position = position_dodge(width = 0.5)) +
+  geom_text(aes(label = Stars, color = Nutrient),
+            position = position_dodge(width = 0.5), vjust = -0.9, size = 3.5,
+            show.legend = FALSE) +
+  scale_color_manual(values = c(Phosphorus = cost_point_map[["PhosphCost"]],
+                                 Sulfur     = cost_point_map[["SulfCost"]])) +
+  scale_shape_manual(values = c(`TRUE` = 17, `FALSE` = 16), guide = "none") +
+  labs(x = "Implied slope: cost -> knockout log2FC(FC)", y = NULL,
+       color = "Nutrient",
+       caption = paste0("Triangle = reference protein (", ref_rp, "); slopes from the cost x RecombinantProtein interaction model")) +
+  theme_pub +
+  theme(plot.caption = element_text(size = 8, color = "grey40", hjust = 0))
+
+fig15
+
+# ggsave("fig15_implied_slopes_by_protein.pdf", fig15, device = cairo_pdf, width = 7, height = 5)
+```
+##6.7 Cost analysis
+```{r}
+## ============================================================
+## Mechanism analyses:
+##   1. Is Sulfur cost's FIXED component (per Fig 8's a+b/size decomposition)
+##      genuinely an initiation-type overhead, with the LEFTOVER (residual,
+##      composition-driven) cost explained by ongoing Met/Cys incorporation?
+##   2. Does Phosphorus cost track PTM/secretory-pathway burden
+##      (ThroughER, NumNGlyc, NumDisulfides) independent of protein size?
+##
+## Assumes this runs in a session that already has, from costpp_figures.R:
+##   costLong, costppTable, cost_cols, nutrient_labels, theme_pub,
+##   cost_point_map, sig_stars(), fit_cost_model(), median_size,
+##   nls_summary, aaCounts (with per-letter AA count columns), tidyverse, broom
+## ============================================================
+library(broom)
+
+## ============================================================
+## ANALYSIS 1: Sulfur cost -- fixed (initiation) vs. residual
+## (composition-driven) components
+## ============================================================
+
+## ---- 1a. Refit the a + b/size model for SulfCost, keeping the
+## fitted object itself (Figure 8 only kept the tidy() coefficients)
+## so we can pull out residuals per gene.
+sulf_df <- costLong %>%
+  filter(CostType == "SulfCost", is.finite(proteinSize), proteinSize > 0)
+
+sulf_nls <- fit_cost_model(sulf_df)
+cat("=== Sulfur cost model: CostValue ~ a + b/proteinSize ===\n")
+print(summary(sulf_nls))
+
+sulf_coefs <- tidy(sulf_nls)
+a_sulf <- sulf_coefs$estimate[sulf_coefs$term == "a"]
+b_sulf <- sulf_coefs$estimate[sulf_coefs$term == "b"]
+pct_fixed_sulf <- 100 * (b_sulf / median_size) / (a_sulf + b_sulf / median_size)
+
+cat(sprintf("\nSulfur cost: %.1f%% fixed (initiation-type) overhead at median protein size (%.0f aa)\n",
+            pct_fixed_sulf, median_size))
+cat("For comparison, fixed-cost percentages across all four nutrients (from Figure 8):\n")
+print(nls_summary %>% select(CostType, a, b, PctFixed))
+
+## ---- 1b. Do the LEFTOVER residuals (cost not explained by the
+## simple size-based fixed/variable split) track Met/Cys composition
+## specifically? This is the test of whether the "variable" component
+## really is ongoing sulfur-amino-acid incorporation.
+sulf_df <- sulf_df %>%
+  mutate(
+    predicted = a_sulf + b_sulf / proteinSize,
+    residual  = CostValue - predicted
+  )
+
+met_cys_pct <- aaCounts %>%
+  select(Gene, SeqLength, M, C) %>%
+  mutate(PctMet = 100 * M / SeqLength, PctCys = 100 * C / SeqLength) %>%
+  select(Gene, PctMet, PctCys)
+
+sulf_resid_df <- sulf_df %>%
+  select(Gene, residual) %>%
+  left_join(met_cys_pct, by = "Gene") %>%
+  drop_na()
+
+lm_sulf_resid <- lm(residual ~ PctMet + PctCys, data = sulf_resid_df)
+cat("\n=== Do residual (composition-driven) Sulfur costs track %Met/%Cys? ===\n")
+print(summary(lm_sulf_resid))
+
+## Figure 16: residual Sulfur cost vs %Met and %Cys
+resid_long <- sulf_resid_df %>%
+  pivot_longer(cols = c(PctMet, PctCys), names_to = "Residue", values_to = "PctComposition") %>%
+  mutate(Residue = recode(Residue, PctMet = "Methionine (%)", PctCys = "Cysteine (%)"))
+
+resid_corr <- resid_long %>%
+  group_by(Residue) %>%
+  summarise(
+    r = cor(PctComposition, residual, use = "pairwise.complete.obs"),
+    p = tryCatch(cor.test(PctComposition, residual)$p.value, error = function(e) NA_real_),
+    .groups = "drop"
+  ) %>%
+  mutate(Label = sprintf("r = %.2f%s", r, sig_stars(p)))
+
+fig16 <- ggplot(resid_long, aes(x = PctComposition, y = residual)) +
+  geom_hline(yintercept = 0, linetype = "dashed", linewidth = 0.3, color = "grey50") +
+  geom_point(alpha = 0.35, size = 1, stroke = 0, color = cost_point_map[["SulfCost"]]) +
+  geom_smooth(method = "lm", se = TRUE, color = "black", linewidth = 0.6) +
+  geom_text(data = resid_corr, aes(x = Inf, y = Inf, label = Label),
+            hjust = 1.1, vjust = 1.4, size = 3, color = "grey15", inherit.aes = FALSE) +
+  facet_wrap(~Residue, scales = "free_x") +
+  labs(x = "Amino acid composition (%)",
+       y = "Residual Sulfur cost\n(observed - fixed/variable-by-size fit)") +
+  theme_pub
+
+fig16
+
+## ============================================================
+## ANALYSIS 2: Does Phosphorus cost track PTM/secretory burden,
+## independent of protein size?
+## ============================================================
+phos_df <- costppTable %>%
+  select(Gene, PhosphCost, ThroughER, NumNGlyc, NumDisulfides, proteinSize) %>%
+  drop_na()
+
+## Nested-model test: do PTM/secretory features explain PhosphCost
+## beyond what protein size alone explains?
+lm_phos_size_only <- lm(PhosphCost ~ proteinSize, data = phos_df)
+lm_phos_full <- lm(PhosphCost ~ proteinSize + ThroughER + NumNGlyc + NumDisulfides, data = phos_df)
+
+cat("\n=== Does adding PTM/secretory features improve fit over protein size alone? ===\n")
+print(anova(lm_phos_size_only, lm_phos_full))
+cat("\n=== Full model summary ===\n")
+print(summary(lm_phos_full))
+
+## Standardized coefficients for a comparable effect-size plot
+phos_df_z <- phos_df %>%
+  mutate(across(c(ThroughER, NumNGlyc, NumDisulfides, proteinSize), ~ as.numeric(scale(.))))
+lm_phos_full_std <- lm(PhosphCost ~ proteinSize + ThroughER + NumNGlyc + NumDisulfides, data = phos_df_z)
+
+coef_phos_ptm <- tidy(lm_phos_full_std, conf.int = TRUE) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(
+    term = factor(term,
+                   levels = c("proteinSize", "ThroughER", "NumNGlyc", "NumDisulfides"),
+                   labels = c("Protein size", "Through ER", "N-glycosylation sites", "Disulfide bonds")),
+    Stars = sig_stars(p.value)
+  )
+
+## Figure 17: coefficient/forest plot
+fig17 <- ggplot(coef_phos_ptm, aes(x = estimate, y = term)) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey50", linewidth = 0.3) +
+  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high), height = 0.2,
+                 color = cost_point_map[["PhosphCost"]], linewidth = 0.6) +
+  geom_point(size = 2.5, color = cost_point_map[["PhosphCost"]]) +
+  geom_text(aes(label = Stars), vjust = -0.9, size = 3.5, color = "grey15") +
+  labs(x = "Standardized coefficient (95% CI)", y = NULL) +
+  theme_pub
+
+fig17
+
+# ggsave("fig16_sulfur_residual_vs_composition.pdf", fig16, device = cairo_pdf, width = 8, height = 4.5)
+# ggsave("fig17_phosphorus_ptm_regression.pdf",      fig17, device = cairo_pdf, width = 6, height = 4)
+```
+

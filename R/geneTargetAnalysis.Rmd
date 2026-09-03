@@ -1,0 +1,189 @@
+---
+title: "geneTargetAnalysis"
+author: "RA"
+date: "2025-05-07"
+output: ''
+---
+
+#0. Startup
+## 0.1 Clear Workspace
+```{r}
+rm(list = ls())
+gc()
+```
+## 0.2 Initialize Libraries
+```{r}
+suppressPackageStartupMessages({
+  library(ggpmisc)
+  library(gridExtra)
+  library(wordspace)
+  library(grid)
+  library("viridis")
+  library(ggplot2)
+  library(ggbreak)
+  library(dplyr)
+  library(devtools)
+  library(tidyverse)
+  library(Biobase)
+  library(edgeR)
+  library(limma)
+  library(RColorBrewer)
+  library(splines2)
+  library(PMA)
+  library(EnhancedVolcano)
+  library(elasticnet)
+  #library(biomaRt)
+  library(svMisc)
+  require(svMisc)
+  library(ggsci)
+  library("gplots")
+  library("RColorBrewer")
+  library(ComplexHeatmap)
+  library(cluster)
+  library(circlize)
+  library(magick)
+  #library(clusterProfiler)
+  library(enrichplot)
+  library(magrittr)
+  library(igraph)
+  library(glue)
+  library(dplyr)
+  require(CoDiNA)
+  require(wTO)
+  require(magrittr)
+  require(igraph)
+  library(aweSOM)
+  library(gprofiler2)
+  library(paletteer)
+  library(matrixStats)
+  library(reshape)
+  library(paletteer)
+  #library(GEOquery)
+  library(msigdbr)
+  library(fgsea)
+  #library(rsbml)
+  library(R.matlab)
+  library(ComplexHeatmap)
+  library(dendsort)
+  library(ggplot2)
+  library(circlize)
+  library(readxl)
+  library("PerformanceAnalytics")
+  library(scales)
+  library(plotly)
+  library(Hmisc)
+  library(NMF)
+})
+
+set.seed(45394534)
+```
+#1. Import Files
+##1.1 Data Files
+```{r}
+common_targets <- read.csv("figure_data/commonTargets.csv")
+ppPSIM <- read.csv("../data/ppPSIMv3_RP.csv")
+# Gene sets for GSEA
+GO_file <- 'figure_data/goSLIMmod.gmt'
+myGO = fgsea::gmtPathways(GO_file)
+```
+
+```{r}
+# Load necessary libraries
+library(msigdbr)
+library(fgsea)
+library(ggplot2)
+library(dplyr)
+library(cluster)
+library(ggdendro)
+
+# Assuming your dataframe 'common_targets' and the 'GO_file' variable are already loaded
+
+# 1. Adjust predicted_change values based on 'category'
+common_targets_adjusted <- common_targets %>%
+  mutate(across(all_of(grep("_predicted_change$", names(.), value = TRUE)),
+                ~ ifelse(grepl("Knockout", category), -., .)))
+
+# 2. Prepare gene lists for GSEA from each '_predicted_change' column
+predicted_change_cols <- grep("_predicted_change$", names(common_targets_adjusted), value = TRUE)
+gene_lists <- list()
+
+for (col in predicted_change_cols) {
+  gene_lists[[col]] <- common_targets_adjusted %>%
+    select(GQ_names, !!sym(col)) %>%
+    na.omit() %>%
+    distinct(GQ_names, .keep_all = TRUE) %>%
+    arrange(desc(!!sym(col))) %>%
+    pull(!!sym(col), name = GQ_names)
+}
+
+# 3. Load Gene Ontology (GO) terms from the .gmt file
+GO_gmt <- gmtPathways(GO_file)
+
+# 4. Run GSEA for each gene list
+gsea_results_list <- list()
+for (name in names(gene_lists)) {
+  gsea_results <- fgsea(pathways = GO_gmt,
+                        stats = gene_lists[[name]],
+                        minSize = 3, # Adjust as needed
+                        maxSize = 500, # Adjust as needed
+                        nperm = 10000) # Consider increasing for publication quality
+  if (!is.null(gsea_results) && nrow(gsea_results) > 0) {
+    gsea_results$protein <- gsub("_predicted_change$", "", name)
+    gsea_results_list[[name]] <- gsea_results
+  } else {
+    cat(sprintf("No significant GSEA results for %s\n", name))
+  }
+}
+
+# Combine GSEA results into a single dataframe
+if (length(gsea_results_list) > 0) {
+  all_gsea_results <- bind_rows(gsea_results_list) 
+} else {
+  stop("No significant GSEA results found for any protein.")
+}
+
+# 5. Hierarchical clustering of GSEA pathways based on NES
+if (nrow(all_gsea_results) > 0) {
+  nes_matrix <- all_gsea_results %>%
+    select(pathway, protein, NES) %>%
+    pivot_wider(names_from = protein, values_from = NES, values_fill = 0) %>%
+    column_to_rownames("pathway")
+
+  if (nrow(nes_matrix) > 1) {
+    d <- dist(nes_matrix)
+    hc <- hclust(d, method = "ward.D2")
+    pathway_order <- rownames(nes_matrix)[hc$order]
+  } else {
+    pathway_order <- rownames(nes_matrix)
+    cat("Only one pathway found, skipping hierarchical clustering.\n")
+  }
+} else {
+  stop("No significant pathways to perform hierarchical clustering.")
+}
+
+# 6. Create the dotplot
+if (nrow(all_gsea_results) > 0) {
+  dotplot <- ggplot(all_gsea_results,
+                    aes(x = pathway,
+                        y = protein,
+                        size = size,
+                        color = NES)) +
+    geom_point() +
+    scale_color_gradient2(low = "blue", mid = "white", high = "red", name = "NES") +
+    #scale_size(name = "-log10(p-value)") +
+    theme_bw() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 0.5),
+          axis.title.x = element_blank(),
+          axis.title.y = element_blank()) +
+    scale_x_discrete(limits = pathway_order) # Apply hierarchical clustering order
+} else {
+  dotplot <- ggplot() +
+    geom_text(aes(x = 0.5, y = 0.5, label = "No significant GSEA results to plot."),
+              hjust = 0.5, vjust = 0.5) +
+    theme_void()
+}
+
+# Print the dotplot
+print(dotplot)
+```
+
