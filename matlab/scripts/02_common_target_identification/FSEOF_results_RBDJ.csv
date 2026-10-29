@@ -2,26 +2,27 @@ Slope	rowID	Enzyme ID	Enzyme Name	Subsystems	Direction	Gr Rule
 3	5	GLCter	Glucose transport into ER	Transport, ER	-1	
 1	7	M4MPDOLter	(GlcNAc)2(Man)5(PP-Dol)1 Transport, ER	Transport, ER	1	
 1	9	MANter	mannose efflux from endoplasmic reticulum	Transport, ER	0	
-23.5306	16	NADH2_u6mh	NADH dehydrogenase, mitochondrial	Oxidative Phosphorylation	0	PAS_chr2-1_0456 and PAS_chr3_0808 and PAS_chr4_0120 and PAS_chr2-2_0366 and PAS_chr2-2_0235 and PAS_chr3_0585 and PAS_chr3_0619 and PAS_chr2-2_0462 and PAS_chr2-1_0359 and PAS_chr1-4_0575 and PAS_chr1-4_0371 and PAS_chr4_0535 and PAS_chr4_0355 and PAS_chr3_1188 and PAS_chr4_0142 and PAS_chr1-4_0039 and PAS_chr1-3_0210 and PAS_chr2-2_0169 and PAS_chr2-2_0035 and PAS_chr1-1_0172 and PAS_chr4_0960 and PAS_chr1-3_0117 and PAS_chr1-1_0124 and PAS_chr1-4_0274 and PAS_chr4_0245 and PAS_chr3_0104 and PAS_chr3_0907 and PAS_chr3_0911 and PAS_chr4_0283 and PAS_chr3_1199
-9.1057	145	3C4MOPtm	3-Carboxy-4-methyl-2-oxopentanoate transport, diffusion, mitochondrial	Transport, Mitochondrial	1	
-7.4317	154	AASAD2	L-aminoadipate-semialdehyde dehydrogenase (NADH)	Threonine and Lysine Metabolism	0	PAS_chr1-4_0153
-26.5872	181	DDPAm	2-deoxy-D-arabino-heptulosonate 7-phosphate synthetase, mitochondrial	Tyrosine, Tryptophan, and Phenylalanine Metabolism	0	
-1.3151	188	DOLPt2er	dolichol phosphate endoplasmic reticular transport via proton symport	Transport, ER	-1	
-26.5872	193	E4Ptm	D-erythrose 4-phosphate mtiochondrial transport via diffusion	Transport, Mitochondrial	1	
-15.4463	310	CYOR_u6m	ubiquinol-6 cytochrome c reductase	Oxidative Phosphorylation	0	PAS_chr2-1_0850 and PAS_chr1-1_0322 and PAS_chr1-1_0322 and PAS_chr1-4_0313 and PAS_chr4_0018
-26.5872	382	2DDA7Ptm	2-Dehydro-3-deoxy-D-arabino-heptonate7-phohsphate mitochondrial transport via diffusion	Transport, Mitochondrial	-1	
-35.403	437	ATPtm_H	ADP/ATP transporter, mitochondrial	Transport, Mitochondrial	0	PAS_chr4_0210
-26.5872	441	CITtbm	citrate transport, mitochondrial	Transport, Mitochondrial	-1	PAS_chr3_0177
-3.7861	530	H2Oter	H2O endoplasmic reticulum transport	Transport, ER	-1	
-42.9037	552	ILETAm	isoleucine transaminase, mitochondrial	Valine, Leucine, and Isoleucine Metabolism	-1	PAS_chr4_0248
-9.1057	556	IPPSm	2-isopropylmalate synthase, mitochondrial	Valine, Leucine, and Isoleucine Metabolism	0	PAS_chr2-1_0415
-9.1057	595	OMCDCm	2-oxo-4-methyl-3-carboxypentanoate decarboxylation	Valine, Leucine, and Isoleucine Metabolism	0	PAS_chr4_0248
-7.2069	643	SLFAT	sulfate adenylyltransferase (ADP)	Cysteine Metabolism	1	PAS_chr1-1_0323
-61.5335	795	GLUt7m	Glutamate transport (uniporter), mitochondrial	Transport, Mitochondrial	0	PAS_chr3_0434
-7.0952	798	TRDOXtp	oxidized thioredoxin peroxisomal transport via diffusion	Transport, Peroxisomal	1	
-7.0952	799	TRDRDtp	reduced thioredoxin peroxisomal transport via diffusion	Transport, Peroxisomal	-1	
-7.0952	810	THIORDXp	hydrogen peroxide reductase (thioredoxin), peroxisomal		-1	PAS_chr4_0284 or PAS_chr1-4_0659
+23.5646	16	NADH2_u6mh	NADH dehydrogenase, mitochondrial	Oxidative Phosphorylation	0	PAS_chr2-1_0456 and PAS_chr3_0808 and PAS_chr4_0120 and PAS_chr2-2_0366 and PAS_chr2-2_0235 and PAS_chr3_0585 and PAS_chr3_0619 and PAS_chr2-2_0462 and PAS_chr2-1_0359 and PAS_chr1-4_0575 and PAS_chr1-4_0371 and PAS_chr4_0535 and PAS_chr4_0355 and PAS_chr3_1188 and PAS_chr4_0142 and PAS_chr1-4_0039 and PAS_chr1-3_0210 and PAS_chr2-2_0169 and PAS_chr2-2_0035 and PAS_chr1-1_0172 and PAS_chr4_0960 and PAS_chr1-3_0117 and PAS_chr1-1_0124 and PAS_chr1-4_0274 and PAS_chr4_0245 and PAS_chr3_0104 and PAS_chr3_0907 and PAS_chr3_0911 and PAS_chr4_0283 and PAS_chr3_1199
+9.0956	145	3C4MOPtm	3-Carboxy-4-methyl-2-oxopentanoate transport, diffusion, mitochondrial	Transport, Mitochondrial	1	
+7.4222	154	AASAD2	L-aminoadipate-semialdehyde dehydrogenase (NADH)	Threonine and Lysine Metabolism	0	PAS_chr1-4_0153
+26.5781	181	DDPAm	2-deoxy-D-arabino-heptulosonate 7-phosphate synthetase, mitochondrial	Tyrosine, Tryptophan, and Phenylalanine Metabolism	0	
+1.3013	188	DOLPt2er	dolichol phosphate endoplasmic reticular transport via proton symport	Transport, ER	-1	
+26.5781	193	E4Ptm	D-erythrose 4-phosphate mtiochondrial transport via diffusion	Transport, Mitochondrial	1	
+15.4617	310	CYOR_u6m	ubiquinol-6 cytochrome c reductase	Oxidative Phosphorylation	0	PAS_chr2-1_0850 and PAS_chr1-1_0322 and PAS_chr1-1_0322 and PAS_chr1-4_0313 and PAS_chr4_0018
+26.5781	382	2DDA7Ptm	2-Dehydro-3-deoxy-D-arabino-heptonate7-phohsphate mitochondrial transport via diffusion	Transport, Mitochondrial	-1	
+35.4534	437	ATPtm_H	ADP/ATP transporter, mitochondrial	Transport, Mitochondrial	0	PAS_chr4_0210
+26.5781	441	CITtbm	citrate transport, mitochondrial	Transport, Mitochondrial	-1	PAS_chr3_0177
+3.7856	530	H2Oter	H2O endoplasmic reticulum transport	Transport, ER	-1	
+42.8969	552	ILETAm	isoleucine transaminase, mitochondrial	Valine, Leucine, and Isoleucine Metabolism	-1	PAS_chr4_0248
+9.0956	556	IPPSm	2-isopropylmalate synthase, mitochondrial	Valine, Leucine, and Isoleucine Metabolism	0	PAS_chr2-1_0415
+9.0956	595	OMCDCm	2-oxo-4-methyl-3-carboxypentanoate decarboxylation	Valine, Leucine, and Isoleucine Metabolism	0	PAS_chr4_0248
+7.2052	643	SLFAT	sulfate adenylyltransferase (ADP)	Cysteine Metabolism	1	PAS_chr1-1_0323
+61.5052	795	GLUt7m	Glutamate transport (uniporter), mitochondrial	Transport, Mitochondrial	0	PAS_chr3_0434
+7.0934	798	TRDOXtp	oxidized thioredoxin peroxisomal transport via diffusion	Transport, Peroxisomal	1	
+7.0934	799	TRDRDtp	reduced thioredoxin peroxisomal transport via diffusion	Transport, Peroxisomal	-1	
+7.0934	810	THIORDXp	hydrogen peroxide reductase (thioredoxin), peroxisomal		-1	PAS_chr4_0284 or PAS_chr1-4_0659
 1	875	BDMT	ALG1	N-Glycan metabolism	0	PAS_chr2-1_0759
+22.0825	891	DHAD1	dihydroxy-acid dehydratase (2,3-dihydroxy-3-methylbutanoate)	Pantothenate and CoA biosynthesis	0	PAS_chr1-4_0458
 1	896	DOLPGT1	ALG6	N-Glycan metabolism	0	PAS_chr2-1_0549
 1	897	DOLPGT2	ALG8	N-Glycan metabolism	0	PAS_chr3_0999
 1	898	DOLPGT3	ALG10	N-Glycan metabolism	0	PAS_chr1-4_0475
@@ -35,136 +36,141 @@ Slope	rowID	Enzyme ID	Enzyme Name	Subsystems	Direction	Gr Rule
 1	936	G16MT	ALG2	N-Glycan metabolism	0	PAS_c121_0002
 1	938	GLCNACPT	ALG7	N-Glycan metabolism	0	PAS_chr2-1_0727
 1	939	GLCNACT	ALG13-ALG14	N-Glycan metabolism	0	PAS_chr3_0944 or PAS_chr1-4_0448
-2.3075	988	MAN1PT2	mannose-1-phosphate guanylyltransferase (GDP)	Fructose and mannose metabolism	1	PAS_chr2-1_0093 or PAS_chr3_0870
-7.9898	1023	P5CRm	pyrroline-5-carboxylate reductase (m)	Arginine and proline metabolism	0	PAS_chr4_0398
-33.2627	1037	PUTA3	puta3	Arginine and proline metabolism	-1	PAS_chr2-1_0853 or PAS_chr4_0254
+2.2936	988	MAN1PT2	mannose-1-phosphate guanylyltransferase (GDP)	Fructose and mannose metabolism	1	PAS_chr2-1_0093 or PAS_chr3_0870
+7.9836	1023	P5CRm	pyrroline-5-carboxylate reductase (m)	Arginine and proline metabolism	0	PAS_chr4_0398
+33.2565	1037	PUTA3	puta3	Arginine and proline metabolism	-1	PAS_chr2-1_0853 or PAS_chr4_0254
 3	1050	UDPDOLPT	UDPglucose:dolichyl-phosphate beta-D-glucosyltransferase	N-Glycan metabolism	0	PAS_chr3_0552
-7.7618	1082	CYSTH2SS	L-serine hydro-lyase (adding hydrogen sulfide, L-cysteine-forming)	Cysteine metabolism	0	PAS_chr2-2_0137
-5.5856	1088	HISTD	histidinol dehydrogenase (step 2)	Histidine Metabolism	0	PAS_chr1-4_0160
-5.5856	1122	HISTD1	histidinol dehydrogenase (step 1)	Histidine Metabolism	0	PAS_chr1-4_0160
-5.9668	1146	ALACPYRL	(S)-2-Aceto-2-hydroxybutanoate pyruvate-lyase (carboxylating)	Valine, Leucine, and Isoleucine Metabolism	0	PAS_chr2-1_0864 or PAS_chr4_0228
-5.9668	1152	3H3M2OPR	(R)-2,3-Dihydroxy-3-methylpentanoate:NADP+ oxidoreductase	Valine, Leucine, and Isoleucine Metabolism	0	PAS_chr1-1_0432
-5.9668	1153	3H3M2OPS	(R)-2,3-Dihydroxy-3-methylpentanoate:NADP+ oxidoreductase	Valine, Leucine, and Isoleucine Metabolism	0	PAS_chr1-1_0432
-7.9898	1234	1PYR5Ctm	1-Pyrroline-5-carboxylate transport into mitochondria	Transport, Mitochondrial	1	
-9.1057	1235	4MOPtm	4-Methyl-2-oxopentanoate transport into mitochondria	Transport, Mitochondrial	-1	
-65.4887	1243	AKGMALtm	alpha-ketoglutarate/malate transporter	Transport, Mitochondrial	0	PAS_chr3_0040
-7.9898	1280	G5SADsm	L-glutamate 5-semialdehyde dehydratase (spontaneous)	Arginine and proline metabolism	1	
-3.5476	1324	O2tx	oxygen peroxisomal transport	Transport, Peroxisomal	1	
-9.1057	1331	3C3HMPtm	2-Isopropylmalate transport, diffusion, mitochondrial	Transport, Mitochondrial	-1	
-12.9952	1334	3MOBtm	3-methyl-2-oxobutanoate transport, diffusion, mitochondrial	Transport, Mitochondrial	-1	
-36.9369	1335	3MOPtm	3-Methyl-2-oxopentanoate transport, diffusion, mitochondrial	Transport, Mitochondrial	1	
-7.4317	1338	AATA	2-aminoadipate transaminase	Threonine and Lysine Metabolism	1	PAS_chr1-4_0608
-0.66951	1350	ACGAM6PS	N-acetylglucosamine-6-phosphate synthase	Amino sugar and nucleotide sugar metabolism	1	PAS_chr4_0060
-0.66951	1351	ACGAMPM	phosphoacetylglucosamine mutase	Amino sugar and nucleotide sugar metabolism	1	PAS_chr1-1_0067
-5.32	1352	ACGKm	acetylglutamate kinase, mitochondrial	Arginine and Proline Metabolism	0	PAS_chr2-1_0168
-22.1009	1354	ACLSm	acetolactate synthase, mitochondrial	Valine, Leucine, and Isoleucine Metabolism	0	PAS_chr4_0228 and PAS_chr2-1_0864
-5.32	1364	ACOTAim	acteylornithine transaminase, irreversible, mitochondrial	Arginine and Proline Metabolism	0	PAS_chr4_0645
-7.2069	1374	ADSK	adenylyl-sulfate kinase	Cysteine Metabolism	0	PAS_chr3_0667
-4.3796	1375	ADSL1r	adenylsuccinate lyase	Nucleotide Metabolism	1	PAS_chr2-2_0329
-4.3796	1377	ADSS	adenylosuccinate synthase	Nucleotide Metabolism	0	PAS_chr4_0613
-5.32	1379	AGPRim	N-acetyl-g-glutamyl-phosphate reductase, irreversible, mitochondrial	Arginine and Proline Metabolism	0	PAS_chr2-1_0168
-3.4177	1382	AICART	phosphoribosylaminoimidazolecarboxamide formyltransferase	Nucleotide Metabolism	1	PAS_chr2-1_0660
-7.0203	1387	ALATA_L	L-alanine transaminase	Alanine and Aspartate Metabolism	-1	PAS_chr3_0482
+7.7613	1082	CYSTH2SS	L-serine hydro-lyase (adding hydrogen sulfide, L-cysteine-forming)	Cysteine metabolism	0	PAS_chr2-2_0137
+5.5827	1088	HISTD	histidinol dehydrogenase (step 2)	Histidine Metabolism	0	PAS_chr1-4_0160
+5.5827	1122	HISTD1	histidinol dehydrogenase (step 1)	Histidine Metabolism	0	PAS_chr1-4_0160
+5.9605	1146	ALACPYRL	(S)-2-Aceto-2-hydroxybutanoate pyruvate-lyase (carboxylating)	Valine, Leucine, and Isoleucine Metabolism	0	PAS_chr2-1_0864 or PAS_chr4_0228
+5.9605	1152	3H3M2OPR	(R)-2,3-Dihydroxy-3-methylpentanoate:NADP+ oxidoreductase	Valine, Leucine, and Isoleucine Metabolism	0	PAS_chr1-1_0432
+5.9605	1153	3H3M2OPS	(R)-2,3-Dihydroxy-3-methylpentanoate:NADP+ oxidoreductase	Valine, Leucine, and Isoleucine Metabolism	0	PAS_chr1-1_0432
+7.9836	1234	1PYR5Ctm	1-Pyrroline-5-carboxylate transport into mitochondria	Transport, Mitochondrial	1	
+9.0956	1235	4MOPtm	4-Methyl-2-oxopentanoate transport into mitochondria	Transport, Mitochondrial	-1	
+65.706	1243	AKGMALtm	alpha-ketoglutarate/malate transporter	Transport, Mitochondrial	0	PAS_chr3_0040
+7.9836	1280	G5SADsm	L-glutamate 5-semialdehyde dehydratase (spontaneous)	Arginine and proline metabolism	1	
+3.5467	1324	O2tx	oxygen peroxisomal transport	Transport, Peroxisomal	1	
+9.0956	1331	3C3HMPtm	2-Isopropylmalate transport, diffusion, mitochondrial	Transport, Mitochondrial	-1	
+12.9869	1334	3MOBtm	3-methyl-2-oxobutanoate transport, diffusion, mitochondrial	Transport, Mitochondrial	-1	
+36.9363	1335	3MOPtm	3-Methyl-2-oxopentanoate transport, diffusion, mitochondrial	Transport, Mitochondrial	1	
+7.4222	1338	AATA	2-aminoadipate transaminase	Threonine and Lysine Metabolism	1	PAS_chr1-4_0608
+0.66675	1350	ACGAM6PS	N-acetylglucosamine-6-phosphate synthase	Amino sugar and nucleotide sugar metabolism	1	PAS_chr4_0060
+0.66675	1351	ACGAMPM	phosphoacetylglucosamine mutase	Amino sugar and nucleotide sugar metabolism	1	PAS_chr1-1_0067
+5.3124	1352	ACGKm	acetylglutamate kinase, mitochondrial	Arginine and Proline Metabolism	0	PAS_chr2-1_0168
+22.0825	1354	ACLSm	acetolactate synthase, mitochondrial	Valine, Leucine, and Isoleucine Metabolism	0	PAS_chr4_0228 and PAS_chr2-1_0864
+5.3124	1364	ACOTAim	acteylornithine transaminase, irreversible, mitochondrial	Arginine and Proline Metabolism	0	PAS_chr4_0645
+7.2052	1374	ADSK	adenylyl-sulfate kinase	Cysteine Metabolism	0	PAS_chr3_0667
+4.3742	1375	ADSL1r	adenylsuccinate lyase	Nucleotide Metabolism	1	PAS_chr2-2_0329
+4.3742	1377	ADSS	adenylosuccinate synthase	Nucleotide Metabolism	0	PAS_chr4_0613
+5.3124	1379	AGPRim	N-acetyl-g-glutamyl-phosphate reductase, irreversible, mitochondrial	Arginine and Proline Metabolism	0	PAS_chr2-1_0168
+3.4103	1382	AICART	phosphoribosylaminoimidazolecarboxamide formyltransferase	Nucleotide Metabolism	1	PAS_chr2-1_0660
+7.0079	1387	ALATA_L	L-alanine transaminase	Alanine and Aspartate Metabolism	-1	PAS_chr3_0482
 13	1388	ALATRS	Alanyl-tRNA synthetase	tRNA charging	0	PAS_chr3_0462
-2.2813	1400	ANPRT	anthranilate phosphoribosyltransferase	Tyrosine, Tryptophan, and Phenylalanine Metabolism	0	PAS_chr4_0294
-2.2813	1401	ANS	anthranilate synthase	Glutamine Metabolism	0	PAS_chr3_0962 or PAS_chr2-1_0158 or PAS_chr2-2_0075
-5.32	1404	ARGSL	argininosuccinate lyase	Arginine and Proline Metabolism	1	PAS_chr1-1_0389
-5.32	1405	ARGSSr	argininosuccinate synthase, reversible	Arginine and Proline Metabolism	1	PAS_chr3_0216
+2.2799	1400	ANPRT	anthranilate phosphoribosyltransferase	Tyrosine, Tryptophan, and Phenylalanine Metabolism	0	PAS_chr4_0294
+2.2799	1401	ANS	anthranilate synthase	Glutamine Metabolism	0	PAS_chr3_0962 or PAS_chr2-1_0158 or PAS_chr2-2_0075
+5.3124	1404	ARGSL	argininosuccinate lyase	Arginine and Proline Metabolism	1	PAS_chr1-1_0389
+5.3124	1405	ARGSSr	argininosuccinate synthase, reversible	Arginine and Proline Metabolism	1	PAS_chr3_0216
 9	1406	ARGTRS	Arginyl-tRNA synthetase	tRNA charging	0	PAS_chr3_0166
-17.4551	1408	ASADi	aspartate-semialdehyde dehydrogenase, irreversible	Alanine and Aspartate Metabolism	0	PAS_chr3_0471
-15.6697	1410	ASNS1	asparagine synthase (glutamine-hydrolysing)	Alanine and Aspartate Metabolism	0	PAS_chr3_0675 or PAS_chr3_0199
+17.3389	1408	ASADi	aspartate-semialdehyde dehydrogenase, irreversible	Alanine and Aspartate Metabolism	0	PAS_chr3_0471
+15.6628	1410	ASNS1	asparagine synthase (glutamine-hydrolysing)	Alanine and Aspartate Metabolism	0	PAS_chr3_0675 or PAS_chr3_0199
 19	1411	ASNTRS	Asparaginyl-tRNA synthetase	tRNA charging	0	PAS_chr1-1_0390
-17.4551	1414	ASPKi	aspartate kinase, irreversible	Alanine and Aspartate Metabolism	0	PAS_chr4_0150
+17.3389	1414	ASPKi	aspartate kinase, irreversible	Alanine and Aspartate Metabolism	0	PAS_chr4_0150
 11	1418	ASPTRS	Aspartyl-tRNA synthetase	tRNA charging	0	PAS_chr1-4_0095
-5.5856	1423	ATPPRT	ATP phosphoribosyltransferase	Histidine Metabolism	0	PAS_chr1-4_0234
-46.7	1424	ATPS3m	ATP synthase, mitochondrial	Oxidative Phosphorylation	0	PAS_chr3_0576 and PAS_chr3_0460 and PAS_chr1-4_0465 and PAS_chr3_0819 and PAS_chr2-2_0165 and PAS_chr1-1_0315 and PAS_chr1-1_0191 and PAS_chr1-4_0445 and PAS_chr2-1_0751 and PAS_chr3_0059 and PAS_chr4_0892 and PAS_chr2-2_0119 and PAS_chr1-1_0484 and PAS_chr1-4_0445 and PAS_chr2-1_0612
-7.2069	1428	BPNT	3',5'-bisphosphate nucleotidase	Cysteine Metabolism	0	PAS_chr2-1_0547
-3.5476	1438	CATp	catalase	Methanol metabolism	0	PAS_chr2-2_0131
-3.2128	1439	CBPS	carbamoyl-phosphate synthase (glutamine-hydrolysing)	Arginine and Proline Metabolism	0	(PAS_chr4_0138 and PAS_chr3_0799) or PAS_chr2-2_0142
-24.3059	1442	CHORM	chorismate mutase	Tyrosine, Tryptophan, and Phenylalanine Metabolism	0	PAS_chr4_0437 or PAS_chr4_0050
-26.5872	1443	CHORS	chorismate synthase	Tyrosine, Tryptophan, and Phenylalanine Metabolism	0	PAS_chr2-1_0637
+5.5827	1423	ATPPRT	ATP phosphoribosyltransferase	Histidine Metabolism	0	PAS_chr1-4_0234
+46.7571	1424	ATPS3m	ATP synthase, mitochondrial	Oxidative Phosphorylation	0	PAS_chr3_0576 and PAS_chr3_0460 and PAS_chr1-4_0465 and PAS_chr3_0819 and PAS_chr2-2_0165 and PAS_chr1-1_0315 and PAS_chr1-1_0191 and PAS_chr1-4_0445 and PAS_chr2-1_0751 and PAS_chr3_0059 and PAS_chr4_0892 and PAS_chr2-2_0119 and PAS_chr1-1_0484 and PAS_chr1-4_0445 and PAS_chr2-1_0612
+7.2052	1428	BPNT	3',5'-bisphosphate nucleotidase	Cysteine Metabolism	0	PAS_chr2-1_0547
+3.5467	1438	CATp	catalase	Methanol metabolism	0	PAS_chr2-2_0131
+3.2009	1439	CBPS	carbamoyl-phosphate synthase (glutamine-hydrolysing)	Arginine and Proline Metabolism	0	(PAS_chr4_0138 and PAS_chr3_0799) or PAS_chr2-2_0142
+24.2983	1442	CHORM	chorismate mutase	Tyrosine, Tryptophan, and Phenylalanine Metabolism	0	PAS_chr4_0437 or PAS_chr4_0050
+26.5781	1443	CHORS	chorismate synthase	Tyrosine, Tryptophan, and Phenylalanine Metabolism	0	PAS_chr2-1_0637
 8	1464	CYSTRS	Cysteinyl-tRNA synthetase	tRNA charging	0	PAS_chr1-4_0514
-22.1009	1478	DHAD1m	dihydroxy-acid dehydratase (2,3-dihydroxy-3-methylbutanoate), mitochondrial	Valine, Leucine, and Isoleucine Metabolism	0	PAS_chr1-4_0458
-5.9668	1479	DHAD2m	dihydroxy-acid dehydratase (2,3-dihydroxy-3-methylpentanoate), mitochondrial	Valine, Leucine, and Isoleucine Metabolism	0	PAS_chr1-4_0458
-26.5872	1486	DHQS	3-dehydroquinate synthase	Tyrosine, Tryptophan, and Phenylalanine Metabolism	0	PAS_chr3_0506
-26.5872	1487	DHQTi	3-dehydroquinate dehydratase, irreversible	Tyrosine, Tryptophan, and Phenylalanine Metabolism	0	PAS_chr3_0506
-7.5317	1536	FUM	fumarase	Citric Acid Cycle	1	PAS_chr3_0647
-0.66951	1552	GF6PTA	glutamine-fructose-6-phosphate transaminase	Glutamine Metabolism	0	PAS_chr2-1_0626
+5.9605	1479	DHAD2m	dihydroxy-acid dehydratase (2,3-dihydroxy-3-methylpentanoate), mitochondrial	Valine, Leucine, and Isoleucine Metabolism	0	PAS_chr1-4_0458
+26.5781	1486	DHQS	3-dehydroquinate synthase	Tyrosine, Tryptophan, and Phenylalanine Metabolism	0	PAS_chr3_0506
+26.5781	1487	DHQTi	3-dehydroquinate dehydratase, irreversible	Tyrosine, Tryptophan, and Phenylalanine Metabolism	0	PAS_chr3_0506
+7.5142	1536	FUM	fumarase	Citric Acid Cycle	1	PAS_chr3_0647
+0.66675	1552	GF6PTA	glutamine-fructose-6-phosphate transaminase	Glutamine Metabolism	0	PAS_chr2-1_0626
 7	1561	GLNTRS	Glutaminyl-tRNA synthetase	tRNA charging	0	PAS_chr3_0285
 9	1570	GLUTRS	Glutamyl-tRNA synthetase	tRNA charging	0	PAS_chr1-4_0598
 15	1576	GLYTRS	Glycyl-tRNA synthetase	tRNA charging	0	PAS_chr3_0376
-61.1708	1590	H2Otm	H2O transport, mitochondrial	Transport, Mitochondrial	-1	
+61.334	1590	H2Otm	H2O transport, mitochondrial	Transport, Mitochondrial	-1	
 1	1604	HEX4	hexokinase (D-mannose:ATP)	Glycolysis/Gluconeogenesis	0	PAS_chr3_1192 or PAS_chr4_0624 or PAS_chr1-4_0447 or PAS_chr1-4_0561
-5.5856	1606	HISTP	histidinol-phosphatase	Histidine Metabolism	0	PAS_chr1-1_0397
+5.5827	1606	HISTP	histidinol-phosphatase	Histidine Metabolism	0	PAS_chr1-1_0397
 7	1607	HISTRS	Histidyl-tRNA synthetase	tRNA charging	0	PAS_chr1-3_0244
-17.4551	1616	HSDxi	homoserine dehydrogenase (NADH), irreversible	Glycine and Serine Metabolism	0	PAS_chr1-4_0049
-18.01	1619	HSK	homoserine kinase	Glycine and Serine Metabolism	0	PAS_chr3_0899
-5.5856	1620	HSTPT	histidinol-phosphate transaminase	Histidine Metabolism	0	PAS_chr2-1_0684
-5.5856	1626	IG3PS	Imidazole-glycerol-3-phosphate synthase	Histidine Metabolism	0	PAS_chr4_0703
-5.5856	1627	IGPDH	imidazoleglycerol-phosphate dehydratase	Histidine Metabolism	0	PAS_chr3_0788
-2.2813	1628	IGPS	indole-3-glycerol-phosphate synthase	Tyrosine, Tryptophan, and Phenylalanine Metabolism	0	PAS_chr3_0962
-36.9369	1629	ILETA	isoleucine transaminase	Valine, Leucine, and Isoleucine Metabolism	1	PAS_chr4_0248
+17.3389	1616	HSDxi	homoserine dehydrogenase (NADH), irreversible	Glycine and Serine Metabolism	0	PAS_chr1-4_0049
+17.895	1619	HSK	homoserine kinase	Glycine and Serine Metabolism	0	PAS_chr3_0899
+5.5827	1620	HSTPT	histidinol-phosphate transaminase	Histidine Metabolism	0	PAS_chr2-1_0684
+5.5827	1626	IG3PS	Imidazole-glycerol-3-phosphate synthase	Histidine Metabolism	0	PAS_chr4_0703
+5.5827	1627	IGPDH	imidazoleglycerol-phosphate dehydratase	Histidine Metabolism	0	PAS_chr3_0788
+2.2799	1628	IGPS	indole-3-glycerol-phosphate synthase	Tyrosine, Tryptophan, and Phenylalanine Metabolism	0	PAS_chr3_0962
+36.9363	1629	ILETA	isoleucine transaminase	Valine, Leucine, and Isoleucine Metabolism	1	PAS_chr4_0248
 9	1630	ILETRS	Isoleucyl-tRNA synthetase	tRNA charging	0	PAS_chr4_0709
-3.4177	1632	IMPC	IMP cyclohydrolase	Nucleotide Metabolism	-1	PAS_chr2-1_0660
-9.1057	1635	IPMD	3-isopropylmalate dehydrogenase	Valine, Leucine, and Isoleucine Metabolism	0	PAS_chr3_0039
-9.1057	1636	IPPMIa	3-isopropylmalate dehydratase	Valine, Leucine, and Isoleucine Metabolism	-1	PAS_chr2-1_0368
-9.1057	1637	IPPMIb	2-isopropylmalate hydratase	Valine, Leucine, and Isoleucine Metabolism	-1	PAS_chr2-1_0368
-22.1009	1639	KARA1im	acetohydroxy acid isomeroreductase, mitochondrial	Valine, Leucine, and Isoleucine Metabolism	0	PAS_chr1-1_0432
-9.1057	1642	LEUTA	leucine transaminase	Valine, Leucine, and Isoleucine Metabolism	-1	PAS_chr4_0248
+3.4103	1632	IMPC	IMP cyclohydrolase	Nucleotide Metabolism	-1	PAS_chr2-1_0660
+9.0956	1635	IPMD	3-isopropylmalate dehydrogenase	Valine, Leucine, and Isoleucine Metabolism	0	PAS_chr3_0039
+9.0956	1636	IPPMIa	3-isopropylmalate dehydratase	Valine, Leucine, and Isoleucine Metabolism	-1	PAS_chr2-1_0368
+9.0956	1637	IPPMIb	2-isopropylmalate hydratase	Valine, Leucine, and Isoleucine Metabolism	-1	PAS_chr2-1_0368
+22.0825	1639	KARA1im	acetohydroxy acid isomeroreductase, mitochondrial	Valine, Leucine, and Isoleucine Metabolism	0	PAS_chr1-1_0432
+9.0956	1642	LEUTA	leucine transaminase	Valine, Leucine, and Isoleucine Metabolism	-1	PAS_chr4_0248
 14	1643	LEUTRS	Leucyl-tRNA synthetase	tRNA charging	0	PAS_chr4_0393
 12	1647	LYSTRS	Lysyl-tRNA synthetase	tRNA charging	0	PAS_chr3_0949
-1.3075	1653	MAN6PI	mannose-6-phosphate isomerase	Fructose and Mannose Metabolism	-1	PAS_chr3_1115
-85.413	1657	MDH	malate dehydrogenase	Citric Acid Cycle	-1	PAS_chr4_0815
-60.0051	1658	MDHm	malate dehydrogenase, mitochondrial	Citric Acid Cycle	1	PAS_chr2-1_0238
-6.3796	1680	NDPK1	nucleoside-diphosphate kinase (ATP:GDP)	Nucleotide Metabolism	1	PAS_chr2-2_0059 or PAS_chr2-1_0769
-193.821	1688	NH4t	ammonia reversible transport	Transport, Extracellular	1	PAS_chr1-4_0394 or PAS_chr2-2_0391
-7.7231	1700	O2tm	O2 transport (diffusion)	Transport, Mitochondrial	1	
-5.32	1702	OCBTi	ornithine carbamoyltransferase, irreversible	Arginine and Proline Metabolism	0	PAS_chr3_0623
-5.32	1707	ORNt3m	ornithine mitochondrial transport via proton antiport	Transport, Mitochondrial	0	PAS_chr2-1_0530 or PAS_chr3_0100
-5.32	1709	ORNTACim	ornithine transacetylase, irreversible, mitochondrial	Arginine and Proline Metabolism	0	PAS_chr3_0176
-7.2069	1712	PAPSR	phosphoadenylyl-sulfate reductase (thioredoxin)	Cysteine Metabolism	0	PAS_chr4_0284
-10.8277	1727	PHETA1	phenylalanine transaminase	Tyrosine, Tryptophan, and Phenylalanine Metabolism	-1	PAS_chr1-4_0608 or PAS_chr4_0147
+1.2936	1653	MAN6PI	mannose-6-phosphate isomerase	Fructose and Mannose Metabolism	-1	PAS_chr3_1115
+85.6684	1657	MDH	malate dehydrogenase	Citric Acid Cycle	-1	PAS_chr4_0815
+60.2231	1658	MDHm	malate dehydrogenase, mitochondrial	Citric Acid Cycle	1	PAS_chr2-1_0238
+10.3741	1680	NDPK1	nucleoside-diphosphate kinase (ATP:GDP)	Nucleotide Metabolism	1	PAS_chr2-2_0059 or PAS_chr2-1_0769
+193.5891	1688	NH4t	ammonia reversible transport	Transport, Extracellular	1	PAS_chr1-4_0394 or PAS_chr2-2_0391
+7.7308	1700	O2tm	O2 transport (diffusion)	Transport, Mitochondrial	1	
+5.3124	1702	OCBTi	ornithine carbamoyltransferase, irreversible	Arginine and Proline Metabolism	0	PAS_chr3_0623
+5.3124	1707	ORNt3m	ornithine mitochondrial transport via proton antiport	Transport, Mitochondrial	0	PAS_chr2-1_0530 or PAS_chr3_0100
+5.3124	1709	ORNTACim	ornithine transacetylase, irreversible, mitochondrial	Arginine and Proline Metabolism	0	PAS_chr3_0176
+7.2052	1712	PAPSR	phosphoadenylyl-sulfate reductase (thioredoxin)	Cysteine Metabolism	0	PAS_chr4_0284
+10.8232	1727	PHETA1	phenylalanine transaminase	Tyrosine, Tryptophan, and Phenylalanine Metabolism	-1	PAS_chr1-4_0608 or PAS_chr4_0147
 13	1728	PHETRS	Phenylalanyl-tRNA synthetase	tRNA charging	0	PAS_chr3_0144 and PAS_chr4_0276
-2.3075	1735	PMANM	phosphomannomutase	Fructose and Mannose Metabolism	-1	PAS_chr2-2_0053
-13.4782	1746	PPND2	prephenate dehydrogenase (NADP)	Tyrosine, Tryptophan, and Phenylalanine Metabolism	0	PAS_chr2-2_0317
-10.8277	1747	PPNDH	prephenate dehydratase	Tyrosine, Tryptophan, and Phenylalanine Metabolism	0	PAS_chr4_0437
-2.2813	1751	PRAIi	phosphoribosylanthranilate isomerase (irreversible)	Tyrosine, Tryptophan, and Phenylalanine Metabolism	0	PAS_chr1-3_0029
-5.5856	1753	PRAMPC	phosphoribosyl-AMP cyclohydrolase	Histidine Metabolism	0	PAS_chr1-4_0160
-5.5856	1755	PRATPP	phosphoribosyl-ATP pyrophosphatase	Histidine Metabolism	0	PAS_chr1-4_0160
-5.5856	1757	PRMICIi	1-(5-phosphoribosyl)-5-[(5-phosphoribosylamino)methylideneamino)imidazole-4-carboxamide isomerase (irreversible)	Histidine Metabolism	0	PAS_chr4_0343
+2.2936	1735	PMANM	phosphomannomutase	Fructose and Mannose Metabolism	-1	PAS_chr2-2_0053
+13.4751	1746	PPND2	prephenate dehydrogenase (NADP)	Tyrosine, Tryptophan, and Phenylalanine Metabolism	0	PAS_chr2-2_0317
+10.8232	1747	PPNDH	prephenate dehydratase	Tyrosine, Tryptophan, and Phenylalanine Metabolism	0	PAS_chr4_0437
+2.2799	1751	PRAIi	phosphoribosylanthranilate isomerase (irreversible)	Tyrosine, Tryptophan, and Phenylalanine Metabolism	0	PAS_chr1-3_0029
+5.5827	1753	PRAMPC	phosphoribosyl-AMP cyclohydrolase	Histidine Metabolism	0	PAS_chr1-4_0160
+5.5827	1755	PRATPP	phosphoribosyl-ATP pyrophosphatase	Histidine Metabolism	0	PAS_chr1-4_0160
+5.5827	1757	PRMICIi	1-(5-phosphoribosyl)-5-[(5-phosphoribosylamino)methylideneamino)imidazole-4-carboxamide isomerase (irreversible)	Histidine Metabolism	0	PAS_chr4_0343
 11	1759	PROTRS	Prolyl-tRNA synthetase	tRNA charging	0	PAS_chr2-2_0209 or PAS_chr1-1_0391
-3.5918	1760	PRPPS	phosphoribosylpyrophosphate synthetase	Pentose phosphate pathway	1	PAS_chr2-2_0174 or PAS_chr3_0062 or PAS_chr1-1_0436 or PAS_chr1-1_0006
-26.5872	1761	PSCVTi	3-phosphoshikimate 1-carboxyvinyltransferase, irreversible	Tyrosine, Tryptophan, and Phenylalanine Metabolism	0	PAS_chr3_0506
-7.4317	1784	SACCD1	saccharopine dehydrogenase (NADP, L-glutamate forming)	Threonine and Lysine Metabolism	1	PAS_chr3_0528
-7.4317	1785	SACCD2	saccharopine dehydrogenase (NAD, L-lysine forming)	Threonine and Lysine Metabolism	1	PAS_chr1-1_0447
+3.5785	1760	PRPPS	phosphoribosylpyrophosphate synthetase	Pentose phosphate pathway	1	PAS_chr2-2_0174 or PAS_chr3_0062 or PAS_chr1-1_0436 or PAS_chr1-1_0006
+26.5781	1761	PSCVTi	3-phosphoshikimate 1-carboxyvinyltransferase, irreversible	Tyrosine, Tryptophan, and Phenylalanine Metabolism	0	PAS_chr3_0506
+7.4222	1784	SACCD1	saccharopine dehydrogenase (NADP, L-glutamate forming)	Threonine and Lysine Metabolism	1	PAS_chr3_0528
+7.4222	1785	SACCD2	saccharopine dehydrogenase (NAD, L-lysine forming)	Threonine and Lysine Metabolism	1	PAS_chr1-1_0447
 18	1792	SERTRS	Seryl-tRNA synthetase	tRNA charging	0	PAS_chr1-4_0104 or PAS_chr1-4_0463
-26.5872	1795	SHK3D	shikimate dehydrogenase	Tyrosine, Tryptophan, and Phenylalanine Metabolism	0	PAS_chr3_0506
-26.5872	1796	SHKK	shikimate kinase	Tyrosine, Tryptophan, and Phenylalanine Metabolism	0	PAS_chr3_0506
-7.2069	1799	SO4ti	sulfate irreversible uniport	Transport, Extracellular	0	PAS_chr1-1_0266 or PAS_chr3_0489
-7.2069	1811	SULR	sulfite reductase (NADPH2)	Cysteine Metabolism	-1	PAS_chr4_0369 or PAS_chr3_1084
-5.9668	1818	THRD_L	L-threonine deaminase	Threonine and Lysine Metabolism	0	PAS_chr1-4_0243 or PAS_chr2-2_0408
-18.01	1819	THRS	threonine synthase	Threonine and Lysine Metabolism	0	PAS_chr2-1_0269
+26.5781	1795	SHK3D	shikimate dehydrogenase	Tyrosine, Tryptophan, and Phenylalanine Metabolism	0	PAS_chr3_0506
+26.5781	1796	SHKK	shikimate kinase	Tyrosine, Tryptophan, and Phenylalanine Metabolism	0	PAS_chr3_0506
+7.2052	1799	SO4ti	sulfate irreversible uniport	Transport, Extracellular	0	PAS_chr1-1_0266 or PAS_chr3_0489
+7.2052	1811	SULR	sulfite reductase (NADPH2)	Cysteine Metabolism	-1	PAS_chr4_0369 or PAS_chr3_1084
+5.9605	1818	THRD_L	L-threonine deaminase	Threonine and Lysine Metabolism	0	PAS_chr1-4_0243 or PAS_chr2-2_0408
+17.895	1819	THRS	threonine synthase	Threonine and Lysine Metabolism	0	PAS_chr2-1_0269
 12	1820	THRTRS	Threonyl-tRNA synthetase	tRNA charging	0	PAS_chr2-2_0238
-36.3854	1831	TREH	alpha,alpha-trehalase	Carbohydrate metabolism	0	PAS_chr4_0816
-2.2813	1835	TRPS1	tryptophan synthase (indoleglycerol phosphate)	Tyrosine, Tryptophan, and Phenylalanine Metabolism	0	PAS_chr3_0634 or PAS_chr2-1_0679
+36.4836	1831	TREH	alpha,alpha-trehalase	Carbohydrate metabolism	0	PAS_chr4_0816
+2.2799	1835	TRPS1	tryptophan synthase (indoleglycerol phosphate)	Tyrosine, Tryptophan, and Phenylalanine Metabolism	0	PAS_chr3_0634 or PAS_chr2-1_0679
 3	1836	TRPTRS	Tryptophanyl-tRNA synthetase	tRNA charging	0	PAS_chr3_0165
-13.4782	1838	TYRTAi	tyrosine transaminase, irreversible	Tyrosine, Tryptophan, and Phenylalanine Metabolism	0	PAS_chr1-4_0608 or PAS_chr4_0147 or PAS_chr4_0974
+13.4751	1838	TYRTAi	tyrosine transaminase, irreversible	Tyrosine, Tryptophan, and Phenylalanine Metabolism	0	PAS_chr1-4_0608 or PAS_chr4_0147 or PAS_chr4_0974
 15	1839	TYRTRS	tyrosyl-tRNA synthetase	tRNA charging	0	PAS_chr4_0522
-0.66951	1841	UDPACGLP	UDP-N-acetylglucosamine diphosphorylase	Amino sugar and nucleotide sugar metabolism	1	PAS_chr3_0676
-12.9962	1853	VALTA	valine transaminase	Valine, Leucine, and Isoleucine Metabolism	-1	PAS_chr4_0248
+0.66675	1841	UDPACGLP	UDP-N-acetylglucosamine diphosphorylase	Amino sugar and nucleotide sugar metabolism	1	PAS_chr3_0676
+12.988	1853	VALTA	valine transaminase	Valine, Leucine, and Isoleucine Metabolism	-1	PAS_chr4_0248
 17	1854	VALTRS	Valyl-tRNA synthetase	tRNA charging	0	PAS_chr3_0754
-7.7231	1858	CYOOm	cytochrome c oxidase, mitochondrial	Oxidative Phosphorylation	0	PAS_chr3_0824 and PAS_chr3_0615 and PAS_chr2-1_0363 and PAS_chr4_0422 and PAS_chr2-2_0266 and PAS_chr2-1_0115 and PAS_chr2-1_0226 and PAS_chr2-1_0344 and PAS_chr2-2_0092 and PAS_chr3_0428 and PAS_chr3_0745 and PAS_chr4_0449 and PAS_chr4_0744 and PAS_chr4_0018
-5.9668	1912	2OBUTtm	2obut transporter (mitochondrial)	Transport, Mitochondrial	1	
-42.9037	1919	ILEtmi	Isoleucine transport from mitochondria to cytosol	Transport, Mitochondrial	0	PAS_chr3_0434
-193.821	1943	Ex_nh4	Ammonium exchange	Exchange reaction	-1	
-7.2069	1974	Ex_so4	Sulfate exchange	Exchange reaction	-1	
-0.58792	2117	Htr	H+ transport to ER	Transport, ER	1	
+7.7308	1858	CYOOm	cytochrome c oxidase, mitochondrial	Oxidative Phosphorylation	0	PAS_chr3_0824 and PAS_chr3_0615 and PAS_chr2-1_0363 and PAS_chr4_0422 and PAS_chr2-2_0266 and PAS_chr2-1_0115 and PAS_chr2-1_0226 and PAS_chr2-1_0344 and PAS_chr2-2_0092 and PAS_chr3_0428 and PAS_chr3_0745 and PAS_chr4_0449 and PAS_chr4_0744 and PAS_chr4_0018
+5.9605	1912	2OBUTtm	2obut transporter (mitochondrial)	Transport, Mitochondrial	1	
+42.8969	1919	ILEtmi	Isoleucine transport from mitochondria to cytosol	Transport, Mitochondrial	0	PAS_chr3_0434
+193.5891	1943	Ex_nh4	Ammonium exchange	Exchange reaction	-1	
+7.2052	1974	Ex_so4	Sulfate exchange	Exchange reaction	-1	
+0.58707	2117	Htr	H+ transport to ER	Transport, ER	1	
 1	2242	RBDJ_aa	RBDJ_aa		0	
-1	2243	RBDJ_ngly_er1_transfer	RBDJ_ngly_er1_transfer		0	
-1	2244	RBDJ_ngly_er2_trim1	RBDJ_ngly_er2_trim1		0	
-1	2245	RBDJ_ngly_er3_trim2	RBDJ_ngly_er3_trim2		0	
-1	2246	RBDJ_ngly_er4_trim3	RBDJ_ngly_er4_trim3		0	
-1	2247	RBDJ_ngly_er5_demanosylation	RBDJ_ngly_er5_demanosylation		0	
-1	2248	RBDJ_maturation	RBDJ_maturation		0	
-1	2249	RBDJ_toe	RBDJ_toe		0	
-1	2250	RBDJ_dilute_e	RBDJ_dilute_e		0	
+1	2243	RBDJ_cotranslocation	RBDJ_cotranslocation		0	
+1	2244	RBDJ_ngly_er1_transfer	RBDJ_ngly_er1_transfer		0	
+1	2245	RBDJ_ngly_er2_trim1	RBDJ_ngly_er2_trim1		0	
+1	2246	RBDJ_ngly_er3_trim2	RBDJ_ngly_er3_trim2		0	
+1	2247	RBDJ_ngly_er4_trim3	RBDJ_ngly_er4_trim3		0	
+1	2248	RBDJ_ngly_er5_demanosylation	RBDJ_ngly_er5_demanosylation		0	
+1	2249	RBDJ_ER2Golgi	RBDJ_ER2Golgi		0	
+1	2250	RBDJ_ngly_golgi1	RBDJ_ngly_golgi1		0	
+1	2251	RBDJ_ngly_golgi2	RBDJ_ngly_golgi2		0	
+1	2252	RBDJ_ngly_golgi3	RBDJ_ngly_golgi3		0	
+1	2253	RBDJ_ngly_golgi4	RBDJ_ngly_golgi4		0	
+1	2254	RBDJ_maturation	RBDJ_maturation		0	
+1	2255	RBDJ_toe	RBDJ_toe		0	
+1	2256	RBDJ_dilute_e	RBDJ_dilute_e		0	

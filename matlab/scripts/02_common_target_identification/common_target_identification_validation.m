@@ -213,7 +213,7 @@ for RP = 1:length(RPs)
         % / (mmol/gDCW/hr) / (OD / 0.25 OD/gWCW * 0.8 gDCW/gWCW) == hr
         % Calculate HSA production rate estimate (g/gDCW/day)
     
-        metadata.ProdRateEst(metadataIdxs(i)) = sol_bm_load.f / RP_mass *  24;
+        metadata.ProdRateEst(metadataIdxs(i)) = sol_bm_load.f * RP_mass *  24;
     end
     
     
